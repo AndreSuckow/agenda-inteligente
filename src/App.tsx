@@ -311,13 +311,29 @@ function App() {
       );
     const isQuestion =
       /\?|\b(você|voce|vc|quem|como|pode|consegue|ajuda)\b/i.test(cleanText);
+    const isAgendaLookup =
+      /\b(tenho algo|alguma coisa|o que tenho|tem algo|compromissos?|marcado|marcada|na agenda|livre|ocupado|ocupada)\b/i.test(
+        cleanText,
+      ) &&
+      Boolean(
+        parsed.date ||
+        /\b(hoje|amanhã|amanha|segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo)\b/i.test(
+          cleanText,
+        ),
+      );
     const hasSchedulingIntent =
-      /\b(agendar|marcar|marca|consulta|compromisso|reunião|reuniao|dentista|médico|medico|almoço|almoco|aula|evento|tenho|preciso)\b/i.test(
+      /\b(agendar|marcar|marca|consulta|compromisso|reunião|reuniao|dentista|médico|medico|almoço|almoco|aula|evento|tenho)\b/i.test(
         cleanText,
       ) || Boolean(parsed.date || parsed.time);
     let response = "Entendi. Qual dia e horário devo considerar?";
     let nextPending = pendingEvent;
-    if (isGreeting) {
+    if (isAgendaLookup && parsed.date) {
+      const matches = events.filter((item) => item.date === parsed.date);
+      nextPending = null;
+      response = matches.length
+        ? `Sim. Em ${parsed.date.split("-").reverse().join("/")} você tem: ${matches.map((item) => `${item.title} às ${item.time}`).join(", ")}.`
+        : `Você não tem compromissos marcados em ${parsed.date.split("-").reverse().join("/")}.`;
+    } else if (isGreeting) {
       response =
         "Olá! Posso organizar compromissos, consultas, reuniões e tarefas. O que você gostaria de agendar?";
     } else if (isQuestion && !hasSchedulingIntent) {
