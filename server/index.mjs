@@ -45,7 +45,11 @@ async function chat(request, response) {
     headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
     body: JSON.stringify({ model, temperature: 0.2, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: systemPrompt }, { role: 'system', content: `Contexto atual: ${context}` }, ...messages.map((message) => ({ role: message.role, content: message.text }))] }),
   })
-  if (!upstream.ok) return send(response, 502, { error: `AI provider returned ${upstream.status}` })
+  if (!upstream.ok) {
+    const providerBody = await upstream.text()
+    console.error(`AI provider error ${upstream.status}: ${providerBody.slice(0, 500)}`)
+    return send(response, 502, { error: `AI provider returned ${upstream.status}`, providerStatus: upstream.status, configured: true })
+  }
   const result = await upstream.json()
   const content = result.choices?.[0]?.message?.content
   if (!content) return send(response, 502, { error: 'AI provider returned an empty response' })

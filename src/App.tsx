@@ -297,11 +297,11 @@ function App() {
         return;
       }
       setNotice(
-        "IA online indisponível; usando o assistente local. Configure AI_API_KEY para ativar o modelo.",
+        "IA online indisponível; usando o assistente local. Verifique a chave, cobrança e modelo no Render.",
       );
     } catch {
       setNotice(
-        "IA online indisponível; usando o assistente local. Configure AI_API_KEY para ativar o modelo.",
+        "IA online indisponível; usando o assistente local. Verifique a chave, cobrança e modelo no Render.",
       );
     }
     const parsed = parseDateTime(cleanText, selectedDate);
