@@ -66,6 +66,12 @@ npm run build
 
 A saida fica em `dist`. O frontend estático do GitHub Pages não consegue executar o backend Node: publique o frontend em Pages e o servidor em Render, Railway, Fly.io ou Vercel Functions. Configure `AI_API_KEY`, `AI_API_URL` e `AI_MODEL` como secrets do serviço de backend e `VITE_API_URL` como variável de build do frontend, apontando para a URL pública da API. Nunca coloque a chave em `VITE_*`.
 
+### Caminho recomendado: Render
+
+O arquivo `render.yaml` já está preparado. No Render, escolha **New > Blueprint**, conecte `AndreSuckow/agenda-inteligente` e confirme o blueprint. No serviço criado, informe sua `AI_API_KEY` em **Environment > Secret Files/Environment Variables** e faça o deploy. O Render fornecerá uma URL como `https://agenda-inteligente-api.onrender.com`.
+
+Depois, configure essa URL como `VITE_API_URL` no workflow do GitHub Pages ou no ambiente de build do frontend. A chave de IA deve ser inserida somente no Render; não precisa ser enviada para mim nem adicionada ao `.env` versionado.
+
 ## GitHub
 
 Com GitHub CLI autenticado:
