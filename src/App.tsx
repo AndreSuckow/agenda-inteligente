@@ -78,6 +78,7 @@ const monthNames = [
   "Dezembro",
 ];
 const weekDays = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
+const apiBaseUrl = import.meta.env.VITE_API_URL || "";
 
 function formatDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -245,7 +246,7 @@ function App() {
       { id: Date.now(), role: "user", text: cleanText, time: now },
     ];
     try {
-      const apiResponse = await fetch("/api/chat", {
+      const apiResponse = await fetch(`${apiBaseUrl}/api/chat`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -258,14 +259,38 @@ function App() {
       if (apiResponse.ok) {
         const result = await apiResponse.json();
         if (result.action === "create" && result.event) {
-          const event = result.event as { title: string; date: string; time: string };
-          const duplicate = events.some((item) => item.title.toLowerCase() === event.title.toLowerCase() && item.date === event.date && item.time === event.time);
-          if (!duplicate) setEvents((current) => [...current, { id: Date.now(), ...event, color: /dentista|médico|consulta|saúde/i.test(event.title) ? "yellow" : "coral" }]);
+          const event = result.event as {
+            title: string;
+            date: string;
+            time: string;
+          };
+          const duplicate = events.some(
+            (item) =>
+              item.title.toLowerCase() === event.title.toLowerCase() &&
+              item.date === event.date &&
+              item.time === event.time,
+          );
+          if (!duplicate)
+            setEvents((current) => [
+              ...current,
+              {
+                id: Date.now(),
+                ...event,
+                color: /dentista|médico|consulta|saúde/i.test(event.title)
+                  ? "yellow"
+                  : "coral",
+              },
+            ]);
           setPendingEvent(null);
         } else if (result.action === "confirm" && result.event) {
           setPendingEvent(result.event);
         }
-        const assistantMessage = { id: Date.now() + 1, role: "assistant" as const, text: result.reply, time: now };
+        const assistantMessage = {
+          id: Date.now() + 1,
+          role: "assistant" as const,
+          text: result.reply,
+          time: now,
+        };
         setMessages([...nextMessages, assistantMessage]);
         setDraft("");
         if (isListening) speak(result.reply);

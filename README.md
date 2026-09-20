@@ -64,7 +64,7 @@ Para sincronizar entre dispositivos, a próxima camada é adicionar autenticaç�
 npm run build
 ```
 
-A saida fica em `dist`. O frontend estático do GitHub Pages não consegue executar o backend Node: publique o frontend em Pages e o servidor em Render, Railway, Fly.io ou Vercel Functions. Configure `AI_API_KEY`, `AI_API_URL` e `AI_MODEL` como secrets do serviço de backend e faça o frontend usar a URL pública da API em produção. Nunca coloque a chave em `VITE_*`.
+A saida fica em `dist`. O frontend estático do GitHub Pages não consegue executar o backend Node: publique o frontend em Pages e o servidor em Render, Railway, Fly.io ou Vercel Functions. Configure `AI_API_KEY`, `AI_API_URL` e `AI_MODEL` como secrets do serviço de backend e `VITE_API_URL` como variável de build do frontend, apontando para a URL pública da API. Nunca coloque a chave em `VITE_*`.
 
 ## GitHub
 
