@@ -296,13 +296,37 @@ function App() {
         if (isListening) speak(result.reply);
         return;
       }
+      setNotice(
+        "IA online indisponível; usando o assistente local. Configure AI_API_KEY para ativar o modelo.",
+      );
     } catch {
-      setNotice("IA online indisponível; usando o assistente local.");
+      setNotice(
+        "IA online indisponível; usando o assistente local. Configure AI_API_KEY para ativar o modelo.",
+      );
     }
     const parsed = parseDateTime(cleanText, selectedDate);
+    const isGreeting =
+      /^(oi|olá|ola|olá agenda|ola agenda|bom dia|boa tarde|boa noite|oie)[!.?]*$/i.test(
+        cleanText,
+      );
+    const isQuestion =
+      /\?|\b(você|voce|vc|quem|como|pode|consegue|ajuda)\b/i.test(cleanText);
+    const hasSchedulingIntent =
+      /\b(agendar|marcar|marca|consulta|compromisso|reunião|reuniao|dentista|médico|medico|almoço|almoco|aula|evento|tenho|preciso)\b/i.test(
+        cleanText,
+      ) || Boolean(parsed.date || parsed.time);
     let response = "Entendi. Qual dia e horário devo considerar?";
     let nextPending = pendingEvent;
-    if (
+    if (isGreeting) {
+      response =
+        "Olá! Posso organizar compromissos, consultas, reuniões e tarefas. O que você gostaria de agendar?";
+    } else if (isQuestion && !hasSchedulingIntent) {
+      response =
+        "Sou sua assistente de agenda. Posso entender um pedido, perguntar o que faltar e pedir sua confirmação antes de salvar.";
+    } else if (!hasSchedulingIntent && !pendingEvent) {
+      response =
+        "Posso ajudar a organizar sua agenda. Diga, por exemplo: 'Tenho dentista terça às 15h'.";
+    } else if (
       pendingEvent &&
       !/não|nao|nunca/i.test(cleanText) &&
       /confirma|confirmo|sim|pode marcar|pode agendar/i.test(cleanText) &&
