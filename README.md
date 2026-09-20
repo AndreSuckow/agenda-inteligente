@@ -23,6 +23,14 @@ npm install
 npm run dev
 ```
 
+Para ativar a IA real em desenvolvimento, copie `.env.example` para `.env`, preencha `AI_API_KEY` no backend e rode:
+
+```bash
+npm run dev:all
+```
+
+O frontend usa `/api/chat`; o Vite encaminha essa rota para `http://localhost:8787`. A chave fica somente no processo Node e nunca chega ao navegador. O endpoint `GET /api/health` informa se a chave foi carregada.
+
 Validacoes disponiveis:
 
 ```bash
@@ -44,9 +52,11 @@ A interface reserva o ponto de conexao, mas a sincronizacao real precisa de back
 
 A meta definida e sincronizacao de escrita: compromissos confirmados no app devem ser criados no Google Agenda, e eventos existentes devem participar da deteccao de conflitos. Use idempotencia/event IDs para evitar duplicacoes.
 
-## Proxima etapa tecnica
+## IA generativa e backend
 
-Para sincronizar entre dispositivos, adicionar backend TypeScript, autenticacao Google, banco para usuarios/eventos/mensagens/conexoes, API de conversa, OAuth do Google Calendar e servico TTS/STT configuravel por ambiente. WhatsApp fica fora da v1, conforme combinado.
+O backend inicial está em `server/index.mjs`. Ele usa qualquer endpoint compatível com o formato de Chat Completions, configurado por `AI_API_URL`, e solicita uma resposta JSON estruturada com `ask`, `confirm` ou `create`. Sem `AI_API_KEY`, o app usa o parser local como fallback e informa essa condição na interface.
+
+Para sincronizar entre dispositivos, a próxima camada é adicionar autenticação Google, banco para usuários/eventos/mensagens/conexões, OAuth do Google Calendar e um serviço TTS/STT configurável por ambiente. WhatsApp fica fora da v1, conforme combinado.
 
 ## Publicar na web
 
@@ -54,7 +64,7 @@ Para sincronizar entre dispositivos, adicionar backend TypeScript, autenticacao 
 npm run build
 ```
 
-A saida fica em `dist`. Em Vercel ou Netlify, use `npm run build` como comando e `dist` como diretorio de publicacao. Adicione a URL de producao as origens autorizadas do Google Cloud quando o OAuth for configurado.
+A saida fica em `dist`. O frontend estático do GitHub Pages não consegue executar o backend Node: publique o frontend em Pages e o servidor em Render, Railway, Fly.io ou Vercel Functions. Configure `AI_API_KEY`, `AI_API_URL` e `AI_MODEL` como secrets do serviço de backend e faça o frontend usar a URL pública da API em produção. Nunca coloque a chave em `VITE_*`.
 
 ## GitHub
 
@@ -71,4 +81,4 @@ O PDF do briefing permanece na raiz. Nunca coloque chaves de API, tokens OAuth o
 
 ## Status da entrega
 
-O nucleo web navegavel, responsivo e otimizado esta implementado. O build de producao passa, com JavaScript principal na faixa de 73 kB gzip. Login Google, persistencia multi-dispositivo, sincronizacao efetiva com Google Agenda e clonagem real de voz dependem do backend, credenciais e servicos externos descritos acima.
+O núcleo web e o backend de IA generativa estão implementados. O build de produção passa, com JavaScript principal na faixa de 74 kB gzip. A IA real funciona assim que `AI_API_KEY` for configurada; login Google, persistência multi-dispositivo, sincronização efetiva com Google Agenda e clonagem real de voz ainda dependem das credenciais e serviços externos descritos acima.

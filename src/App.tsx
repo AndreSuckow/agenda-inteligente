@@ -233,7 +233,7 @@ function App() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const sendMessage = (text = draft) => {
+  const sendMessage = async (text = draft) => {
     const cleanText = text.trim();
     if (!cleanText) return;
     const now = new Date().toLocaleTimeString("pt-BR", {
@@ -244,6 +244,36 @@ function App() {
       ...messages,
       { id: Date.now(), role: "user", text: cleanText, time: now },
     ];
+    try {
+      const apiResponse = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          messages: nextMessages,
+          pendingEvent,
+          existingEvents: events,
+          referenceDate: formatDate(selectedDate),
+        }),
+      });
+      if (apiResponse.ok) {
+        const result = await apiResponse.json();
+        if (result.action === "create" && result.event) {
+          const event = result.event as { title: string; date: string; time: string };
+          const duplicate = events.some((item) => item.title.toLowerCase() === event.title.toLowerCase() && item.date === event.date && item.time === event.time);
+          if (!duplicate) setEvents((current) => [...current, { id: Date.now(), ...event, color: /dentista|médico|consulta|saúde/i.test(event.title) ? "yellow" : "coral" }]);
+          setPendingEvent(null);
+        } else if (result.action === "confirm" && result.event) {
+          setPendingEvent(result.event);
+        }
+        const assistantMessage = { id: Date.now() + 1, role: "assistant" as const, text: result.reply, time: now };
+        setMessages([...nextMessages, assistantMessage]);
+        setDraft("");
+        if (isListening) speak(result.reply);
+        return;
+      }
+    } catch {
+      setNotice("IA online indisponível; usando o assistente local.");
+    }
     const parsed = parseDateTime(cleanText, selectedDate);
     let response = "Entendi. Qual dia e horário devo considerar?";
     let nextPending = pendingEvent;
