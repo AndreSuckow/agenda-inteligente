@@ -15,7 +15,7 @@ import { MAX_TASK_TAG_LENGTH, MAX_TASK_TAGS, normalizeTaskTags } from '../shared
 
 const Dashboard = lazy(() => import('./components/Dashboard'))
 type TaskFilter = 'all' | 'active' | 'overdue' | 'overdue-completed' | TaskStatus | 'deleted'
-type DueDateFilter = 'any' | 'today' | 'today-tomorrow' | 'this-week'
+type DueDateFilter = 'any' | 'today' | 'today-tomorrow' | 'this-week' | 'this-month'
 
 const emptyForm = {
   title: '',
@@ -56,6 +56,11 @@ function dateInputValueWithOffset(dateInputValue: string, offsetDays: number) {
   const date = new Date(`${dateInputValue}T12:00:00`)
   date.setDate(date.getDate() + offsetDays)
   return dateInputValueFromDate(date)
+}
+
+function lastDayOfMonthInputValue(dateInputValue: string) {
+  const [year, month] = dateInputValue.split('-').map(Number)
+  return dateInputValueFromDate(new Date(year, month, 0))
 }
 
 function formatTimestamp(timestamp: string) {
@@ -282,6 +287,8 @@ function App() {
     const daysSinceMonday = (new Date(`${today}T12:00:00`).getDay() + 6) % 7
     const weekStart = dateInputValueWithOffset(today, -daysSinceMonday)
     const weekEnd = dateInputValueWithOffset(today, 6 - daysSinceMonday)
+    const monthStart = `${today.slice(0, 7)}-01`
+    const monthEnd = lastDayOfMonthInputValue(today)
     return tasks.filter((task) => {
       const matchesStatus = filter === 'all'
         ? true
@@ -300,7 +307,9 @@ function App() {
             ? task.dueDate === today
             : dueDateFilter === 'today-tomorrow'
               ? task.dueDate >= today && task.dueDate <= tomorrow
-              : task.dueDate >= weekStart && task.dueDate <= weekEnd
+              : dueDateFilter === 'this-week'
+                ? task.dueDate >= weekStart && task.dueDate <= weekEnd
+                : task.dueDate >= monthStart && task.dueDate <= monthEnd
         ))
 
       return (
@@ -862,27 +871,21 @@ function App() {
               {availableTags.map((tag) => <option key={tag.toLowerCase()} value={tag}>{tag}</option>)}
             </select>
           </div>
-          <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filtrar por prazo">
-            {([
-              { value: 'any', label: 'Qualquer prazo' },
-              { value: 'today', label: 'Hoje' },
-              { value: 'today-tomorrow', label: 'Hoje e amanhã' },
-              { value: 'this-week', label: 'Esta semana' },
-            ] satisfies { value: DueDateFilter; label: string }[]).map(({ value, label }) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={dueDateFilter === value}
-                onClick={() => setDueDateFilter(value)}
-                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${
-                  dueDateFilter === value
-                    ? 'border-indigo-600 bg-indigo-600 text-white'
-                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="mb-4">
+            <label htmlFor="due-date-filter" className="sr-only">Data de vencimento</label>
+            <select
+              id="due-date-filter"
+              aria-label="Data de vencimento"
+              value={dueDateFilter}
+              onChange={(event) => setDueDateFilter(event.target.value as DueDateFilter)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm sm:w-auto sm:min-w-48"
+            >
+              <option value="any">Data de vencimento</option>
+              <option value="today">Hoje</option>
+              <option value="today-tomorrow">Hoje e amanhã</option>
+              <option value="this-week">Esta semana</option>
+              <option value="this-month">Este mês</option>
+            </select>
           </div>
           <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <label className="block text-xs font-medium text-slate-600">
