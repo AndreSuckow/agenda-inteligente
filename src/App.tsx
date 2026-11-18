@@ -108,7 +108,7 @@ function App() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<TaskFilter>('active')
   const [selectedTag, setSelectedTag] = useState('')
-  const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<number>>(() => new Set())
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Set<number>>(() => new Set())
   const [createdAfter, setCreatedAfter] = useState('')
   const [createdBefore, setCreatedBefore] = useState('')
   const [appliedCreatedAfter, setAppliedCreatedAfter] = useState('')
@@ -304,7 +304,7 @@ function App() {
   }
 
   const toggleTaskCollapsed = (taskId: number) => {
-    setCollapsedTaskIds((current) => {
+    setExpandedTaskIds((current) => {
       const next = new Set(current)
       if (next.has(taskId)) next.delete(taskId)
       else next.add(taskId)
@@ -843,7 +843,7 @@ function App() {
           </div>
           <div className="space-y-3">
             {filteredTasks.map((task) => {
-              const isCollapsed = collapsedTaskIds.has(task.id)
+              const isCollapsed = !expandedTaskIds.has(task.id)
               const completedSubtasks = task.subtasks.filter((subtask) => subtask.completed).length
               return (
                 <article key={task.id} className={`rounded-xl border bg-white p-4 shadow-sm ${task.status === 'completed' ? 'border-slate-200 opacity-70' : 'border-slate-200'}`}>
