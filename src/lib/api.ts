@@ -12,6 +12,7 @@ type TaskRow = {
   description: string | null
   tags: string[]
   due_date: string | null
+  due_time: string | null
   priority: Priority
   status: TaskStatus
   recurrence: Recurrence
@@ -61,10 +62,14 @@ const taskInputSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(MAX_TASK_TAG_LENGTH)).max(MAX_TASK_TAGS).optional()
     .transform((tags) => tags ? normalizeTaskTags(tags) : undefined),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dueTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/).optional(),
   priority: z.enum(['low', 'medium', 'high']),
   status: z.enum(['pending', 'completed']).optional(),
   recurrence: z.enum(['none', 'daily', 'weekly', 'monthly']),
 }).superRefine((input, context) => {
+  if (input.dueTime && !input.dueDate) {
+    context.addIssue({ code: 'custom', path: ['dueTime'], message: 'Informe o prazo para definir um horário limite.' })
+  }
   const { subtaskTitles } = parseDescription(input.description)
   if (subtaskTitles.length > MAX_SUBTASKS) {
     context.addIssue({
@@ -111,6 +116,7 @@ function mapTask(row: TaskRow, subtasks: Subtask[] = []): Task {
     description: row.description,
     tags: row.tags ?? [],
     dueDate: row.due_date,
+    dueTime: row.due_time?.slice(0, 5) ?? null,
     priority: row.priority,
     status: row.status,
     recurrence: row.recurrence,
@@ -138,6 +144,8 @@ function taskSortOrder(a: Task, b: Task) {
   if (a.priority !== b.priority) return priorityOrder[a.priority] - priorityOrder[b.priority]
   if (Boolean(a.dueDate) !== Boolean(b.dueDate)) return a.dueDate ? -1 : 1
   if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate)
+  if (Boolean(a.dueTime) !== Boolean(b.dueTime)) return a.dueTime ? -1 : 1
+  if (a.dueTime && b.dueTime && a.dueTime !== b.dueTime) return a.dueTime.localeCompare(b.dueTime)
   return b.id - a.id
 }
 
@@ -191,6 +199,7 @@ async function saveTask(id: number | null, inputValue: unknown): Promise<Task | 
     p_description: description ?? null,
     p_tags: input.tags ?? null,
     p_due_date: input.dueDate ?? null,
+    p_due_time: input.dueTime ?? null,
     p_priority: input.priority,
     p_status: id === null ? 'pending' : input.status ?? 'pending',
     p_recurrence: input.recurrence,

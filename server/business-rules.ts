@@ -15,6 +15,7 @@ export interface Task {
   description: string | null
   tags: string[]
   dueDate: string | null
+  dueTime: string | null
   priority: Priority
   status: TaskStatus
   recurrence: Recurrence
@@ -25,10 +26,10 @@ export interface Task {
   subtasks: Subtask[]
 }
 
-export function isOverdue(dueDate: string | null, status: TaskStatus, now = new Date()) {
-  if (!dueDate || status === 'completed') return false
-  const endOfDueDay = new Date(`${dueDate}T23:59:59`)
-  return Number.isNaN(endOfDueDay.getTime()) ? false : endOfDueDay.getTime() < now.getTime()
+export function isOverdue(task: Pick<Task, 'dueDate' | 'dueTime' | 'status'>, now = new Date()) {
+  if (!task.dueDate || task.status === 'completed') return false
+  const deadline = new Date(`${task.dueDate}T${task.dueTime ?? '23:59:59'}`)
+  return Number.isNaN(deadline.getTime()) ? false : deadline.getTime() < now.getTime()
 }
 
 export function parseVoiceCommand(transcript: string) {

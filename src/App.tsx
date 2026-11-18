@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { BarChart3, CalendarDays, ChevronDown, ChevronUp, Gift, List, LogOut, MicOff, Moon, Plus, Search, Sun, Trash2, X } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
-import type { Priority, Recurrence, Subtask, Task, TaskStatus } from '../server/business-rules'
+import { isOverdue, type Priority, type Recurrence, type Subtask, type Task, type TaskStatus } from '../server/business-rules'
 import MonthCalendar from './components/MonthCalendar'
 import BirthdayManager from './components/BirthdayManager'
 import GoogleLoginScreen from './components/GoogleLoginScreen'
@@ -15,12 +15,15 @@ import { MAX_TASK_TAG_LENGTH, MAX_TASK_TAGS, normalizeTaskTags } from '../shared
 
 const Dashboard = lazy(() => import('./components/Dashboard'))
 type TaskFilter = 'all' | 'active' | 'overdue' | 'overdue-completed' | TaskStatus | 'deleted'
+type DueDateFilter = 'any' | 'today' | 'today-tomorrow' | 'this-week'
 
 const emptyForm = {
   title: '',
   description: '',
   tags: [] as string[],
   dueDate: '',
+  dueTime: '',
+  dueTimeEnabled: false,
   priority: 'medium' as Priority,
   recurrence: 'none' as Recurrence,
   status: 'pending' as TaskStatus,
@@ -38,11 +41,21 @@ function formatDate(date: string | null) {
 function dateInputValueFromToday(offsetDays: number) {
   const date = new Date()
   date.setDate(date.getDate() + offsetDays)
+  return dateInputValueFromDate(date)
+}
+
+function dateInputValueFromDate(date: Date) {
   return [
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, '0'),
     String(date.getDate()).padStart(2, '0'),
   ].join('-')
+}
+
+function dateInputValueWithOffset(dateInputValue: string, offsetDays: number) {
+  const date = new Date(`${dateInputValue}T12:00:00`)
+  date.setDate(date.getDate() + offsetDays)
+  return dateInputValueFromDate(date)
 }
 
 function formatTimestamp(timestamp: string) {
@@ -62,9 +75,8 @@ function descriptionForForm(task: Task) {
   return [task.description?.trim(), ...subtaskLines].filter(Boolean).join('\n')
 }
 
-function isOverdue(task: Task) {
-  if (!task.dueDate || task.status === 'completed') return false
-  return new Date(`${task.dueDate}T23:59:59`).getTime() < Date.now()
+function formatDeadline(task: Pick<Task, 'dueDate' | 'dueTime'>) {
+  return `${formatDate(task.dueDate)}${task.dueTime ? ` às ${task.dueTime}` : ''}`
 }
 
 function readInitialPreferences() {
@@ -107,6 +119,7 @@ function App() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<TaskFilter>('active')
+  const [dueDateFilter, setDueDateFilter] = useState<DueDateFilter>('any')
   const [selectedTag, setSelectedTag] = useState('')
   const [expandedTaskIds, setExpandedTaskIds] = useState<Set<number>>(() => new Set())
   const [createdAfter, setCreatedAfter] = useState('')
@@ -264,8 +277,13 @@ function App() {
     const query = search.toLowerCase()
     const createdAfterTimestamp = appliedCreatedAfter ? new Date(`${appliedCreatedAfter}T00:00:00`).getTime() : null
     const createdBeforeTimestamp = appliedCreatedBefore ? new Date(`${appliedCreatedBefore}T23:59:59.999`).getTime() : null
-    return tasks.filter((task) =>
-      (filter === 'all'
+    const today = todayKey
+    const tomorrow = dateInputValueWithOffset(today, 1)
+    const daysSinceMonday = (new Date(`${today}T12:00:00`).getDay() + 6) % 7
+    const weekStart = dateInputValueWithOffset(today, -daysSinceMonday)
+    const weekEnd = dateInputValueWithOffset(today, 6 - daysSinceMonday)
+    return tasks.filter((task) => {
+      const matchesStatus = filter === 'all'
         ? true
         : filter === 'active'
           ? !task.deletedAt
@@ -275,13 +293,26 @@ function App() {
               ? !task.deletedAt && isOverdue(task)
               : filter === 'overdue-completed'
                 ? !task.deletedAt && isCompletedAfterDueDate(task.dueDate, task.completedAt)
-                : task.status === filter && !task.deletedAt) &&
-      (!selectedTag || task.tags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase())) &&
-      (createdAfterTimestamp === null || new Date(task.createdAt).getTime() >= createdAfterTimestamp) &&
-      (createdBeforeTimestamp === null || new Date(task.createdAt).getTime() <= createdBeforeTimestamp) &&
-      (`${task.title} ${task.description ?? ''} ${task.tags.join(' ')} ${task.id}`.toLowerCase().includes(query)),
-    )
-  }, [tasks, search, filter, selectedTag, appliedCreatedAfter, appliedCreatedBefore])
+                : task.status === filter && !task.deletedAt
+      const matchesDueDate = dueDateFilter === 'any'
+        || (task.dueDate !== null && (
+          dueDateFilter === 'today'
+            ? task.dueDate === today
+            : dueDateFilter === 'today-tomorrow'
+              ? task.dueDate >= today && task.dueDate <= tomorrow
+              : task.dueDate >= weekStart && task.dueDate <= weekEnd
+        ))
+
+      return (
+        matchesStatus &&
+        matchesDueDate &&
+        (!selectedTag || task.tags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase())) &&
+        (createdAfterTimestamp === null || new Date(task.createdAt).getTime() >= createdAfterTimestamp) &&
+        (createdBeforeTimestamp === null || new Date(task.createdAt).getTime() <= createdBeforeTimestamp) &&
+        (`${task.title} ${task.description ?? ''} ${task.tags.join(' ')} ${task.id}`.toLowerCase().includes(query))
+      )
+    })
+  }, [tasks, search, filter, dueDateFilter, todayKey, selectedTag, appliedCreatedAfter, appliedCreatedBefore])
 
   const addTaskTag = () => {
     const tag = tagInput.trim()
@@ -323,6 +354,7 @@ function App() {
   const openCalendarView = () => {
     setSearch('')
     setFilter('active')
+    setDueDateFilter('any')
     setSelectedTag('')
     setCreatedAfter('')
     setCreatedBefore('')
@@ -395,12 +427,17 @@ function App() {
   const saveTask = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
+    if (form.dueTimeEnabled && (!form.dueDate || !form.dueTime)) {
+      setError('Informe a data e o horário limite da atividade.')
+      return
+    }
     try {
       const payload = {
         title: form.title,
         description: form.description || undefined,
         tags: form.tags,
         dueDate: form.dueDate || undefined,
+        dueTime: form.dueTimeEnabled ? form.dueTime : undefined,
         priority: form.priority,
         recurrence: form.recurrence,
         status: form.status,
@@ -425,6 +462,8 @@ function App() {
       description: descriptionForForm(task),
       tags: task.tags,
       dueDate: task.dueDate ?? '',
+      dueTime: task.dueTime ?? '',
+      dueTimeEnabled: task.dueTime !== null,
       priority: task.priority,
       recurrence: task.recurrence,
       status: task.status,
@@ -456,6 +495,7 @@ function App() {
           description: descriptionForForm(task) || undefined,
           tags: task.tags,
           dueDate: task.dueDate ?? undefined,
+          dueTime: task.dueTime ?? undefined,
           priority: task.priority,
           recurrence: task.recurrence,
           status: task.status === 'completed' ? 'pending' : 'completed',
@@ -693,8 +733,36 @@ function App() {
                     ))}
                   </div>
                 </div>
-                <input id="task-due-date" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                <input id="task-due-date" type="date" required={form.dueTimeEnabled} value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
                   className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+                <label htmlFor="task-due-time-enabled" className="mt-2 flex items-center gap-2 text-sm font-medium">
+                  <input
+                    id="task-due-time-enabled"
+                    type="checkbox"
+                    checked={form.dueTimeEnabled}
+                    onChange={(event) => setForm({
+                      ...form,
+                      dueTimeEnabled: event.target.checked,
+                      dueTime: event.target.checked ? form.dueTime : '',
+                    })}
+                    className="size-4 rounded border-slate-300 accent-indigo-600"
+                  />
+                  Definir horário limite
+                </label>
+                {form.dueTimeEnabled && (
+                  <div className="mt-2">
+                    <label htmlFor="task-due-time" className="mb-1 block text-xs font-medium text-slate-600">Horário limite</label>
+                    <input
+                      id="task-due-time"
+                      type="time"
+                      required
+                      value={form.dueTime}
+                      onChange={(event) => setForm({ ...form, dueTime: event.target.value })}
+                      className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">Após esse horário, a atividade fica atrasada.</p>
+                  </div>
+                )}
               </div>
               <label className="block text-sm font-medium">
                 Prioridade
@@ -794,6 +862,28 @@ function App() {
               {availableTags.map((tag) => <option key={tag.toLowerCase()} value={tag}>{tag}</option>)}
             </select>
           </div>
+          <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="Filtrar por prazo">
+            {([
+              { value: 'any', label: 'Qualquer prazo' },
+              { value: 'today', label: 'Hoje' },
+              { value: 'today-tomorrow', label: 'Hoje e amanhã' },
+              { value: 'this-week', label: 'Esta semana' },
+            ] satisfies { value: DueDateFilter; label: string }[]).map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={dueDateFilter === value}
+                onClick={() => setDueDateFilter(value)}
+                className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${
+                  dueDateFilter === value
+                    ? 'border-indigo-600 bg-indigo-600 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <label className="block text-xs font-medium text-slate-600">
               Criada a partir de
@@ -873,8 +963,8 @@ function App() {
                                 <span className={`rounded-full px-2 py-1 ${task.priority === 'high' ? 'bg-red-50 text-red-700' : task.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
                                   Prioridade {priorityLabel(task.priority)}
                                 </span>
-                                <span className={`rounded-full px-2 py-1 ${isOverdue(task) || isCompletedAfterDueDate(task.dueDate, task.completedAt) ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
-                                  {isOverdue(task) ? 'Atrasada · ' : isCompletedAfterDueDate(task.dueDate, task.completedAt) ? 'Concluída com atraso · ' : ''}{formatDate(task.dueDate)}
+                                <span className={`rounded-full px-2 py-1 ${isOverdue(task) || isCompletedAfterDueDate(task.dueDate, task.completedAt, task.dueTime) ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                                  {isOverdue(task) ? 'Atrasada · ' : isCompletedAfterDueDate(task.dueDate, task.completedAt, task.dueTime) ? 'Concluída com atraso · ' : ''}{formatDeadline(task)}
                                 </span>
                                 {task.tags.map((tag) => (
                                   <span key={tag.toLowerCase()} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">#{tag}</span>

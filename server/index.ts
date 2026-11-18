@@ -31,10 +31,14 @@ const taskInputSchema = z.object({
   tags: z.array(z.string().trim().min(1).max(MAX_TASK_TAG_LENGTH)).max(MAX_TASK_TAGS).optional()
     .transform((tags) => tags ? normalizeTaskTags(tags) : undefined),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  dueTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/).optional(),
   priority: z.enum(['low', 'medium', 'high']),
   status: z.enum(['pending', 'completed']).optional(),
   recurrence: z.enum(['none', 'daily', 'weekly', 'monthly']),
 }).superRefine((input, context) => {
+  if (input.dueTime && !input.dueDate) {
+    context.addIssue({ code: 'custom', path: ['dueTime'], message: 'Informe o prazo para definir um horário limite.' })
+  }
   const { subtaskTitles } = parseDescription(input.description)
   if (subtaskTitles.length > MAX_SUBTASKS) {
     context.addIssue({
@@ -68,6 +72,7 @@ app.post('/api/tasks', (request, response, next) => {
       description: input.description,
       tags: input.tags ?? [],
       dueDate: input.dueDate,
+      dueTime: input.dueTime,
       priority: input.priority,
       recurrence: input.recurrence,
     })
@@ -95,6 +100,7 @@ app.put('/api/tasks/:id', (request, response, next) => {
       description: input.description,
       tags: input.tags,
       dueDate: input.dueDate,
+      dueTime: input.dueTime,
       priority: input.priority,
       status: input.status ?? 'pending',
       recurrence: input.recurrence,

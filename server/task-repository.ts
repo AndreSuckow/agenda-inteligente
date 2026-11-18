@@ -8,6 +8,7 @@ type TaskRow = {
   title: string
   description: string | null
   due_date: string | null
+  due_time: string | null
   priority: Priority
   status: TaskStatus
   recurrence: Recurrence
@@ -52,6 +53,7 @@ function toTask(row: TaskRow, savedSubtasks: Subtask[] = [], tags: string[] = []
     description: usesLegacyDescription ? legacyDescription.description ?? null : row.description,
     tags,
     dueDate: row.due_date,
+    dueTime: row.due_time,
     priority: row.priority,
     status: row.status,
     recurrence: row.recurrence,
@@ -179,6 +181,8 @@ export function listTasks(): Task[] {
       CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
       due_date IS NULL,
       due_date,
+      due_time IS NULL,
+      due_time,
       id DESC
   `).all() as TaskRow[]
   const subtasksByTask = getSavedSubtasksByTask()
@@ -196,18 +200,20 @@ export function createTask(input: {
   description?: string
   tags?: string[]
   dueDate?: string
+  dueTime?: string
   priority: Priority
   recurrence: Recurrence
 }) {
   const parsedDescription = parseDescription(input.description)
   const create = db.transaction(() => {
     const result = db.prepare(`
-      INSERT INTO tasks (title, description, due_date, priority, recurrence)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO tasks (title, description, due_date, due_time, priority, recurrence)
+      VALUES (?, ?, ?, ?, ?, ?)
     `).run(
       input.title,
       parsedDescription.description ?? null,
       input.dueDate ?? null,
+      input.dueTime ?? null,
       input.priority,
       input.recurrence,
     )
@@ -224,6 +230,7 @@ export function updateTask(id: number, input: {
   description?: string
   tags?: string[]
   dueDate?: string
+  dueTime?: string
   priority: Priority
   status: TaskStatus
   recurrence: Recurrence
@@ -239,13 +246,14 @@ export function updateTask(id: number, input: {
   const update = db.transaction(() => {
     db.prepare(`
       UPDATE tasks
-      SET title = ?, description = ?, due_date = ?, priority = ?, status = ?,
+      SET title = ?, description = ?, due_date = ?, due_time = ?, priority = ?, status = ?,
           recurrence = ?, completed_at = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(
       input.title,
       parsedDescription.description ?? null,
       input.dueDate ?? null,
+      input.dueTime ?? null,
       input.priority,
       input.status,
       input.recurrence,
@@ -328,9 +336,9 @@ function createNextOccurrence(taskId: number) {
   ].join('-')
 
   const result = db.prepare(`
-    INSERT INTO tasks (title, description, due_date, priority, recurrence)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(task.title, task.description, nextDueDate, task.priority, task.recurrence)
+    INSERT INTO tasks (title, description, due_date, due_time, priority, recurrence)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(task.title, task.description, nextDueDate, task.dueTime, task.priority, task.recurrence)
   const nextTaskId = Number(result.lastInsertRowid)
   insertSubtasks(nextTaskId, task.subtasks.map((subtask) => subtask.title))
   replaceTags(nextTaskId, task.tags)

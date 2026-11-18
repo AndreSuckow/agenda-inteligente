@@ -37,6 +37,7 @@ test('completing every subtask completes the parent and creates a fresh recurrin
     description: 'Notes\n- First step\n- Second step',
     tags: ['Work', 'Planning'],
     dueDate: '2031-02-03',
+    dueTime: '10:30',
     priority: 'high',
     recurrence: 'weekly',
   })
@@ -58,6 +59,7 @@ test('completing every subtask completes the parent and creates a fresh recurrin
   )
   assert.ok(nextOccurrence)
   assert.equal(nextOccurrence.dueDate, '2031-02-10')
+  assert.equal(nextOccurrence.dueTime, '10:30')
   assert.deepEqual(nextOccurrence.tags, ['Work', 'Planning'])
   assert.deepEqual(nextOccurrence.subtasks.map((subtask) => subtask.title), ['First step', 'Second step'])
   assert.deepEqual(nextOccurrence.subtasks.map((subtask) => subtask.completed), [false, false])
@@ -82,6 +84,39 @@ test('task tags are normalized, persisted and replaced when the task is edited',
   })
   assert.ok(updated)
   assert.deepEqual(updated.tags, ['Planning'])
+})
+
+test('optional deadline times are saved and can be removed when editing', () => {
+  const task = createTask({
+    title: 'Deadline time repository test',
+    dueDate: '2032-05-06',
+    dueTime: '09:15',
+    priority: 'medium',
+    recurrence: 'none',
+  })
+  assert.ok(task)
+  assert.equal(task.dueTime, '09:15')
+
+  const updated = updateTask(task.id, {
+    title: task.title,
+    dueDate: task.dueDate ?? undefined,
+    dueTime: '11:45',
+    priority: task.priority,
+    status: task.status,
+    recurrence: task.recurrence,
+  })
+  assert.ok(updated)
+  assert.equal(updated.dueTime, '11:45')
+
+  const cleared = updateTask(task.id, {
+    title: task.title,
+    dueDate: task.dueDate ?? undefined,
+    priority: task.priority,
+    status: task.status,
+    recurrence: task.recurrence,
+  })
+  assert.ok(cleared)
+  assert.equal(cleared.dueTime, null)
 })
 
 test('adding recurrence to a task with subtasks carries them into its next occurrence', () => {

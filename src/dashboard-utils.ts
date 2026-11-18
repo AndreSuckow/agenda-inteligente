@@ -1,4 +1,4 @@
-import type { Task } from '../server/business-rules'
+import { isOverdue, type Task } from '../server/business-rules'
 
 export type DashboardGranularity = 'day' | 'month' | 'year'
 
@@ -35,10 +35,13 @@ function dateKeyFromTimestamp(timestamp: string) {
   return Number.isNaN(date.getTime()) ? null : localDateKey(date)
 }
 
-export function isCompletedAfterDueDate(dueDate: string | null, completedAt: string | null) {
+export function isCompletedAfterDueDate(dueDate: string | null, completedAt: string | null, dueTime: string | null = null) {
   if (!dueDate || !completedAt) return false
-  const completedDate = dateKeyFromTimestamp(completedAt)
-  return completedDate !== null && completedDate > dueDate
+  const completedTimestamp = new Date(completedAt).getTime()
+  const deadlineTimestamp = new Date(`${dueDate}T${dueTime ?? '23:59:59'}`).getTime()
+  return !Number.isNaN(completedTimestamp)
+    && !Number.isNaN(deadlineTimestamp)
+    && completedTimestamp > deadlineTimestamp
 }
 
 function bucketKey(dateKey: string, granularity: DashboardGranularity) {
@@ -82,15 +85,12 @@ export function getDashboardSummary(tasks: Task[], granularity: DashboardGranula
     completedWithDueDate: 0,
   }))
   const bucketsByKey = new Map(buckets.map((bucket) => [bucket.key, bucket]))
-  const todayKey = localDateKey(now)
   let overdueOpen = 0
 
   for (const task of tasks) {
     if (task.deletedAt) continue
 
-    if (task.status === 'pending' && task.dueDate && task.dueDate < todayKey) {
-      overdueOpen += 1
-    }
+    if (isOverdue(task, now)) overdueOpen += 1
 
     const createdDate = dateKeyFromTimestamp(task.createdAt)
     if (createdDate) {
@@ -107,7 +107,7 @@ export function getDashboardSummary(tasks: Task[], granularity: DashboardGranula
     completedBucket.completed += 1
     if (!task.dueDate) continue
     completedBucket.completedWithDueDate += 1
-    if (isCompletedAfterDueDate(task.dueDate, task.completedAt)) {
+    if (isCompletedAfterDueDate(task.dueDate, task.completedAt, task.dueTime)) {
       completedBucket.lateCompleted += 1
     } else {
       completedBucket.onTimeCompleted += 1

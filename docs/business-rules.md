@@ -16,7 +16,7 @@ Cada atividade pode ter até 10 tags livres, com até 30 caracteres cada. Tags s
 
 ## Atraso
 
-Uma atividade está atrasada quando possui prazo, está pendente e o instante atual excede o fim do dia informado. O campo de prazo não contém horário.
+Uma atividade está atrasada quando possui prazo, está pendente e o instante atual excede o horário limite. O horário limite é opcional; quando não informado, considera-se o fim do dia do prazo. As horas são interpretadas no fuso local do usuário.
 
 ## Calendário
 
@@ -30,11 +30,11 @@ O SQLite grava `created_at` em UTC. A API entrega esse instante em formato ISO 8
 
 O dashboard apresenta períodos agrupados por dia (últimos 30 dias), mês (últimos 12 meses) ou ano (últimos 5 anos). Novas tarefas são agrupadas pela data local de `created_at`; conclusões, pela data local de `completed_at`. Tarefas excluídas não entram nos indicadores.
 
-A pontualidade considera somente tarefas concluídas com prazo definido: uma conclusão é no prazo quando ocorre até o fim do dia do prazo, e atrasada quando ocorre depois. O percentual de cada categoria usa como denominador todas as conclusões com prazo no período. Tarefas pendentes vencidas são exibidas separadamente como um total atual. Ao reabrir uma atividade, `completed_at` é apagado; portanto, ela deixa de contar como concluída. O sistema ainda não mantém histórico de reaberturas.
+A pontualidade considera somente tarefas concluídas com prazo definido: uma conclusão é no prazo quando ocorre até o horário limite (ou até o fim do dia, se não houver horário), e atrasada quando ocorre depois. O percentual de cada categoria usa como denominador todas as conclusões com prazo no período. Tarefas pendentes vencidas são exibidas separadamente como um total atual. Ao reabrir uma atividade, `completed_at` é apagado; portanto, ela deixa de contar como concluída. O sistema ainda não mantém histórico de reaberturas.
 
 ## Recorrência
 
-As opções são nenhuma, diária, semanal e mensal. Ao concluir uma ocorrência pendente que possua prazo, uma nova atividade é criada no próximo prazo calculado. Concluir manualmente uma ocorrência já concluída não cria outra.
+As opções são nenhuma, diária, semanal e mensal. Ao concluir uma ocorrência pendente que possua prazo, uma nova atividade é criada no próximo prazo calculado e recebe o mesmo horário limite. Concluir manualmente uma ocorrência já concluída não cria outra.
 
 As subtarefas fazem parte de cada ocorrência: uma nova ocorrência recebe os mesmos títulos e posições, mas todas começam pendentes. Alterar a lista de subtarefas antes de concluir a ocorrência afeta a próxima ocorrência criada. Ocorrências anteriores ou futuras já criadas não são sincronizadas em conjunto.
 

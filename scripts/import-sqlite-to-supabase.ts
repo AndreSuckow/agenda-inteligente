@@ -6,6 +6,7 @@ type LocalTask = {
   title: string
   description: string | null
   due_date: string | null
+  due_time: string | null
   priority: Priority
   status: TaskStatus
   recurrence: Recurrence
@@ -77,7 +78,7 @@ async function main() {
     }
 
     const tasks = db.prepare(`
-      SELECT id, title, description, due_date, priority, status, recurrence,
+      SELECT id, title, description, due_date, due_time, priority, status, recurrence,
         completed_at, created_at, updated_at, deleted_at
       FROM tasks
       ORDER BY id
@@ -118,6 +119,7 @@ async function main() {
         description: task.description,
         tags: tagsByTask.get(task.id) ?? [],
         due_date: task.due_date,
+        due_time: task.due_time,
         priority: task.priority,
         status: task.status,
         recurrence: task.recurrence,

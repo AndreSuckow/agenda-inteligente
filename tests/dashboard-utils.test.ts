@@ -10,6 +10,7 @@ function makeTask(overrides: Partial<Task> & Pick<Task, 'id'>): Task {
     description: null,
     tags: [],
     dueDate: null,
+    dueTime: null,
     priority: 'medium',
     status: 'pending',
     recurrence: 'none',
@@ -37,6 +38,8 @@ test('summarizes created, completed, overdue and on-time tasks in the selected m
       completedAt: '2026-11-19T13:00:00',
     }),
     makeTask({ id: 3, dueDate: '2026-11-01' }),
+    makeTask({ id: 5, dueDate: '2026-11-20', dueTime: '11:00', createdAt: '2025-10-31T12:00:00' }),
+    makeTask({ id: 6, dueDate: '2026-11-20', dueTime: '13:00', createdAt: '2025-10-31T12:00:00' }),
     makeTask({
       id: 4,
       status: 'completed',
@@ -53,7 +56,7 @@ test('summarizes created, completed, overdue and on-time tasks in the selected m
   assert.equal(summary.completedWithDueDate, 2)
   assert.equal(summary.onTimeCompleted, 1)
   assert.equal(summary.lateCompleted, 1)
-  assert.equal(summary.overdueOpen, 1)
+  assert.equal(summary.overdueOpen, 2)
 })
 
 test('groups activity by the date it was created and the date it was completed', () => {
@@ -79,6 +82,8 @@ test('groups activity by the date it was created and the date it was completed',
 test('identifies completed tasks finished after their due date', () => {
   assert.equal(isCompletedAfterDueDate('2026-11-18', '2026-11-19T13:00:00'), true)
   assert.equal(isCompletedAfterDueDate('2026-11-19', '2026-11-19T23:59:00'), false)
+  assert.equal(isCompletedAfterDueDate('2026-11-19', '2026-11-19T17:01:00', '17:00'), true)
+  assert.equal(isCompletedAfterDueDate('2026-11-19', '2026-11-19T16:59:00', '17:00'), false)
   assert.equal(isCompletedAfterDueDate(null, '2026-11-19T13:00:00'), false)
   assert.equal(isCompletedAfterDueDate('2026-11-18', null), false)
 })

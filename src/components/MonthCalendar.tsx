@@ -245,7 +245,7 @@ function MonthCalendar({ tasks, month, todayKey, onMonthChange, onTaskSelect }: 
                             type="button"
                             disabled={Boolean(task.deletedAt)}
                             onClick={() => onTaskSelect(task)}
-                            title={`#${task.id} ${task.title}`}
+                            title={`#${task.id} ${task.title}${task.dueTime ? ` · Prazo ${task.dueTime}` : ''}`}
                             style={{ width: 'max-content', maxWidth: spanningWidth }}
                             className={`relative z-30 block break-words rounded px-1.5 py-1 text-left text-xs leading-4 shadow-sm ${
                               task.deletedAt
@@ -255,7 +255,9 @@ function MonthCalendar({ tasks, month, todayKey, onMonthChange, onTaskSelect }: 
                                   : 'bg-indigo-100 text-indigo-900 hover:bg-indigo-200'
                             }`}
                           >
-                            <span className="block font-semibold">#{task.id}</span>
+                            <span className="block font-semibold">
+                              #{task.id}{task.dueTime ? ` · ${task.dueTime}` : ''}
+                            </span>
                             {titleLines.map((line, index) => (
                               <span key={`${task.id}-${index}`} className="block break-words">
                                 {line}

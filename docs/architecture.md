@@ -27,7 +27,8 @@ O componente React solicita dados via `/api/tasks`. A API valida o corpo da requ
 - `id`: inteiro, chave primária e identificador visível.
 - `title`: texto obrigatório, até 120 caracteres.
 - `description`: texto opcional.
-- `due_date`: data sem horário no formato `YYYY-MM-DD`.
+- `due_date`: data no formato `YYYY-MM-DD`.
+- `due_time`: horário limite local opcional no formato `HH:mm`; nulo significa fim do dia.
 - `priority`: `low`, `medium` ou `high`.
 - `status`: `pending` ou `completed`.
 - `recurrence`: `none`, `daily`, `weekly` ou `monthly`.

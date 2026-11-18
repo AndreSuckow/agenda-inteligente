@@ -25,7 +25,7 @@ Execute os testes após alterações em `server/business-rules.ts`, `server/task
 
 As migrações locais ficam em `server/migrations/` e são executadas ao iniciar a API. O número do nome determina a ordem e é registrado em `schema_migrations`. Nunca edite uma migração já aplicada; crie o próximo arquivo versionado.
 
-As migrações do Supabase ficam em `supabase/migrations/` e precisam ser aplicadas ao projeto remoto antes de publicar uma interface que dependa delas. Para tags, execute `20261118000100_task_tags.sql` no SQL Editor do Supabase.
+As migrações do Supabase ficam em `supabase/migrations/` e precisam ser aplicadas ao projeto remoto antes de publicar uma interface que dependa delas. Execute `20261118000100_task_tags.sql` para tags e `20261118000200_task_due_time.sql` para horários limite no SQL Editor do Supabase.
 
 Antes de atualizar o banco em produção, faça backup de `agenda.db` e do arquivo WAL associado, se existir.
 
@@ -58,6 +58,7 @@ Problemas comuns:
 - Ordenação e consultas: `server/task-repository.ts`.
 - Campos e validação externa: `server/index.ts`.
 - Recorrência: `createNextOccurrence` em `server/task-repository.ts`.
+- Atraso e prazo horário: `due_time` em `server/business-rules.ts` e `server/task-repository.ts`.
 - Filtros e cards: `src/App.tsx`.
 - Visualização mensal e distribuição das atividades por prazo: `src/components/MonthCalendar.tsx`.
 - Botão de voz: `src/App.tsx`; permanece visível, mas desativado temporariamente.
