@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { BarChart3, CalendarDays, ChevronDown, Gift, List, LogOut, MicOff, Moon, Plus, Search, Sun, Trash2, X } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronDown, ChevronUp, Gift, List, LogOut, MicOff, Moon, Plus, Search, Sun, Trash2, X } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import type { Priority, Recurrence, Subtask, Task, TaskStatus } from '../server/business-rules'
 import MonthCalendar from './components/MonthCalendar'
@@ -108,6 +108,7 @@ function App() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<TaskFilter>('active')
   const [selectedTag, setSelectedTag] = useState('')
+  const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<number>>(() => new Set())
   const [createdAfter, setCreatedAfter] = useState('')
   const [createdBefore, setCreatedBefore] = useState('')
   const [appliedCreatedAfter, setAppliedCreatedAfter] = useState('')
@@ -300,6 +301,15 @@ function App() {
     setForm({ ...form, tags: normalizeTaskTags([...form.tags, tag]) })
     setTagInput('')
     setError('')
+  }
+
+  const toggleTaskCollapsed = (taskId: number) => {
+    setCollapsedTaskIds((current) => {
+      const next = new Set(current)
+      if (next.has(taskId)) next.delete(taskId)
+      else next.add(taskId)
+      return next
+    })
   }
 
   const resetForm = () => {
@@ -832,74 +842,99 @@ function App() {
             </div>
           </div>
           <div className="space-y-3">
-            {filteredTasks.map((task) => (
-              <article key={task.id} className={`rounded-xl border bg-white p-4 shadow-sm ${task.status === 'completed' ? 'border-slate-200 opacity-70' : 'border-slate-200'}`}>
-                <div className="flex items-start gap-3">
-                  {!task.deletedAt && (
-                    <button type="button" onClick={() => void toggleStatus(task)} aria-label={task.status === 'completed' ? 'Reabrir atividade' : 'Concluir atividade'}
-                      aria-pressed={task.status === 'completed'}
-                      className={`task-completion-toggle mt-0.5 size-5 shrink-0 rounded-full border-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${task.status === 'completed' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`} />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <button type="button" onClick={() => editTask(task)} disabled={Boolean(task.deletedAt)}
-                      className="block w-full text-left disabled:cursor-default">
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-bold text-slate-500">#{task.id}</span>
-                        <h3 className={`font-semibold ${task.status === 'completed' ? 'line-through text-slate-500' : ''}`}>{task.title}</h3>
-                      </div>
-                      {task.description && <p className="mt-1 text-sm text-slate-500">{task.description}</p>}
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                        <span className={`rounded-full px-2 py-1 ${task.priority === 'high' ? 'bg-red-50 text-red-700' : task.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                          Prioridade {priorityLabel(task.priority)}
-                        </span>
-                        <span className={`rounded-full px-2 py-1 ${isOverdue(task) || isCompletedAfterDueDate(task.dueDate, task.completedAt) ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {isOverdue(task) ? 'Atrasada · ' : isCompletedAfterDueDate(task.dueDate, task.completedAt) ? 'Concluída com atraso · ' : ''}{formatDate(task.dueDate)}
-                        </span>
-                        {task.tags.map((tag) => (
-                          <span key={tag.toLowerCase()} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">#{tag}</span>
-                        ))}
-                        {task.recurrence !== 'none' && <span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-700">Recorrente</span>}
-                        {task.subtasks.length > 0 && (
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
-                            {task.subtasks.filter((subtask) => subtask.completed).length}/{task.subtasks.length} subtarefas
-                          </span>
-                        )}
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
-                          Criada às {formatTimestamp(task.createdAt)}
-                        </span>
-                        {task.deletedAt && (
-                          <span className="rounded-full bg-red-50 px-2 py-1 text-red-700">
-                            Excluída às {formatTimestamp(task.deletedAt)}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                    {task.subtasks.length > 0 && (
-                      <div className="mt-3 space-y-1.5 border-l-2 border-slate-200 pl-3">
-                        {task.subtasks.map((subtask) => (
-                          <label key={`${task.id}-${subtask.position}`} className="flex items-start gap-2 text-sm text-slate-600">
-                            <input
-                              type="checkbox"
-                              checked={subtask.completed}
-                              disabled={Boolean(task.deletedAt)}
-                              onChange={(event) => void toggleSubtask(task, subtask, event.target.checked)}
-                              className="mt-0.5 size-4 rounded border-slate-300 accent-indigo-600"
-                            />
-                            <span className={subtask.completed ? 'text-slate-400 line-through' : ''}>{subtask.title}</span>
-                          </label>
-                        ))}
-                      </div>
+            {filteredTasks.map((task) => {
+              const isCollapsed = collapsedTaskIds.has(task.id)
+              const completedSubtasks = task.subtasks.filter((subtask) => subtask.completed).length
+              return (
+                <article key={task.id} className={`rounded-xl border bg-white p-4 shadow-sm ${task.status === 'completed' ? 'border-slate-200 opacity-70' : 'border-slate-200'}`}>
+                  <div className={`flex gap-3 ${isCollapsed ? 'items-center' : 'items-start'}`}>
+                    {!task.deletedAt && (
+                      <button type="button" onClick={() => void toggleStatus(task)} aria-label={task.status === 'completed' ? 'Reabrir atividade' : 'Concluir atividade'}
+                        aria-pressed={task.status === 'completed'}
+                        className={`task-completion-toggle size-5 shrink-0 rounded-full border-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${isCollapsed ? '' : 'mt-0.5'} ${task.status === 'completed' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`} />
                     )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => editTask(task)} disabled={Boolean(task.deletedAt)}
+                          className="block min-w-0 flex-1 text-left disabled:cursor-default">
+                          <div className="flex min-w-0 items-center gap-2">
+                            {!isCollapsed && <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-bold text-slate-500">#{task.id}</span>}
+                            <h3 className={`min-w-0 font-semibold ${isCollapsed ? 'truncate' : ''} ${task.status === 'completed' ? 'line-through text-slate-500' : ''}`}>{task.title}</h3>
+                            {isCollapsed && task.subtasks.length > 0 && (
+                              <span aria-label={`${completedSubtasks} de ${task.subtasks.length} subtarefas concluídas`} className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                                {completedSubtasks}/{task.subtasks.length}
+                              </span>
+                            )}
+                          </div>
+                          {!isCollapsed && (
+                            <>
+                              {task.description && <p className="mt-1 text-sm text-slate-500">{task.description}</p>}
+                              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                <span className={`rounded-full px-2 py-1 ${task.priority === 'high' ? 'bg-red-50 text-red-700' : task.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                                  Prioridade {priorityLabel(task.priority)}
+                                </span>
+                                <span className={`rounded-full px-2 py-1 ${isOverdue(task) || isCompletedAfterDueDate(task.dueDate, task.completedAt) ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                                  {isOverdue(task) ? 'Atrasada · ' : isCompletedAfterDueDate(task.dueDate, task.completedAt) ? 'Concluída com atraso · ' : ''}{formatDate(task.dueDate)}
+                                </span>
+                                {task.tags.map((tag) => (
+                                  <span key={tag.toLowerCase()} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">#{tag}</span>
+                                ))}
+                                {task.recurrence !== 'none' && <span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-700">Recorrente</span>}
+                                {task.subtasks.length > 0 && (
+                                  <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+                                    {completedSubtasks}/{task.subtasks.length} subtarefas
+                                  </span>
+                                )}
+                                <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+                                  Criada às {formatTimestamp(task.createdAt)}
+                                </span>
+                                {task.deletedAt && (
+                                  <span className="rounded-full bg-red-50 px-2 py-1 text-red-700">
+                                    Excluída às {formatTimestamp(task.deletedAt)}
+                                  </span>
+                                )}
+                              </div>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleTaskCollapsed(task.id)}
+                          aria-label={isCollapsed ? 'Expandir atividade' : 'Minimizar atividade'}
+                          aria-expanded={!isCollapsed}
+                          title={isCollapsed ? 'Expandir atividade' : 'Minimizar atividade'}
+                          className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500"
+                        >
+                          {isCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
+                        </button>
+                        {!task.deletedAt && (
+                          <button type="button" onClick={() => void deleteTask(task.id)} aria-label={`Excluir atividade ${task.id}`}
+                            className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600">
+                            <Trash2 size={17} />
+                          </button>
+                        )}
+                      </div>
+                      {!isCollapsed && task.subtasks.length > 0 && (
+                        <div className="mt-3 space-y-1.5 border-l-2 border-slate-200 pl-3">
+                          {task.subtasks.map((subtask) => (
+                            <label key={`${task.id}-${subtask.position}`} className="flex items-start gap-2 text-sm text-slate-600">
+                              <input
+                                type="checkbox"
+                                checked={subtask.completed}
+                                disabled={Boolean(task.deletedAt)}
+                                onChange={(event) => void toggleSubtask(task, subtask, event.target.checked)}
+                                className="mt-0.5 size-4 rounded border-slate-300 accent-indigo-600"
+                              />
+                              <span className={subtask.completed ? 'text-slate-400 line-through' : ''}>{subtask.title}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  {!task.deletedAt && (
-                    <button type="button" onClick={() => void deleteTask(task.id)} aria-label={`Excluir atividade ${task.id}`}
-                      className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600">
-                      <Trash2 size={17} />
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
+                </article>
+              )
+            })}
             {filteredTasks.length === 0 && (
               <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center text-sm text-slate-500">
                 Nenhuma atividade encontrada.
