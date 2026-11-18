@@ -516,9 +516,9 @@ function App() {
   }
 
   return (
-    <main className={`theme-${theme} min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom))] text-foreground lg:pb-0`}>
+    <main className={`theme-${theme} min-h-screen w-full min-w-0 bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom))] text-foreground lg:pb-0`}>
       <Toaster position="top-right" theme={theme} richColors />
-      <header className="relative z-30 border-b border-slate-200 bg-white">
+      <header className="relative z-30 w-full border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-6 sm:py-4">
           <button
             type="button"
@@ -568,8 +568,8 @@ function App() {
       <div className={view === 'calendar'
         ? 'mx-auto w-full max-w-[1920px] px-2 py-2 sm:px-4'
         : view === 'birthdays' || view === 'dashboard'
-          ? 'mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8'
-          : 'mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[360px_1fr]'}>
+          ? 'mx-auto w-full min-w-0 max-w-7xl px-4 py-6 sm:px-6 sm:py-8'
+          : 'mx-auto grid w-full min-w-0 max-w-7xl gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[360px_minmax(0,1fr)]'}>
         {view === 'calendar' && calendarAddOpen && (
           <button
             type="button"
@@ -742,7 +742,7 @@ function App() {
         </aside>
         )}
 
-        <section>
+        <section className="min-w-0">
           {view === 'birthdays' ? (
             <BirthdayManager />
           ) : view === 'dashboard' ? (
