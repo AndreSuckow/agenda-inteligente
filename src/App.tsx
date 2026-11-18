@@ -16,6 +16,7 @@ import { MAX_TASK_TAG_LENGTH, MAX_TASK_TAGS, normalizeTaskTags } from '../shared
 const Dashboard = lazy(() => import('./components/Dashboard'))
 type TaskFilter = 'all' | 'active' | 'overdue' | 'overdue-completed' | TaskStatus | 'deleted'
 type DueDateFilter = 'any' | 'today' | 'today-tomorrow' | 'this-week' | 'this-month'
+type DueDateShortcut = 'today' | 'tomorrow' | null
 
 const emptyForm = {
   title: '',
@@ -42,6 +43,10 @@ function dateInputValueFromToday(offsetDays: number) {
   const date = new Date()
   date.setDate(date.getDate() + offsetDays)
   return dateInputValueFromDate(date)
+}
+
+function createDefaultTaskForm() {
+  return { ...emptyForm, dueDate: dateInputValueFromToday(0) }
 }
 
 function dateInputValueFromDate(date: Date) {
@@ -119,7 +124,8 @@ function App() {
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState('')
   const [theme, setTheme] = useState<'dark' | 'light'>(initialPreferences.theme)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState(createDefaultTaskForm)
+  const [dueDateShortcut, setDueDateShortcut] = useState<DueDateShortcut>('today')
   const [tagInput, setTagInput] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
@@ -173,7 +179,8 @@ function App() {
     const closeTaskFormOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMobileTaskFormOpen(false)
-        setForm(emptyForm)
+        setForm(createDefaultTaskForm())
+        setDueDateShortcut('today')
         setEditingId(null)
       }
     }
@@ -353,7 +360,8 @@ function App() {
   }
 
   const resetForm = () => {
-    setForm(emptyForm)
+    setForm(createDefaultTaskForm())
+    setDueDateShortcut('today')
     setTagInput('')
     setEditingId(null)
     setCalendarAddOpen(false)
@@ -381,7 +389,8 @@ function App() {
 
   const openNewTaskFromToolbar = () => {
     setView('list')
-    setForm(emptyForm)
+    setForm(createDefaultTaskForm())
+    setDueDateShortcut('today')
     setTagInput('')
     setEditingId(null)
     setCalendarAddOpen(false)
@@ -414,7 +423,8 @@ function App() {
   }
 
   const openCalendarForm = () => {
-    setForm(emptyForm)
+    setForm(createDefaultTaskForm())
+    setDueDateShortcut('today')
     setTagInput('')
     setEditingId(null)
     setMobileTaskFormOpen(false)
@@ -424,7 +434,8 @@ function App() {
 
   const openNewTaskFromDashboard = () => {
     setView('list')
-    setForm(emptyForm)
+    setForm(createDefaultTaskForm())
+    setDueDateShortcut('today')
     setTagInput('')
     setEditingId(null)
     setCalendarAddOpen(false)
@@ -466,6 +477,11 @@ function App() {
   const editTask = (task: Task) => {
     setEditingId(task.id)
     setTagInput('')
+    setDueDateShortcut(task.dueDate === dateInputValueFromToday(0)
+      ? 'today'
+      : task.dueDate === dateInputValueFromToday(1)
+        ? 'tomorrow'
+        : null)
     setForm({
       title: task.title,
       description: descriptionForForm(task),
@@ -723,26 +739,46 @@ function App() {
             </div>
             <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
               <div>
-                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1">
+                <div className="mb-1.5 flex h-5 items-center justify-between gap-1">
                   <label htmlFor="task-due-date" className="text-sm font-medium">Prazo</label>
                   <div role="group" aria-label="Atalhos rápidos de prazo" className="flex items-center gap-0.5">
                     {[
-                      { label: 'Ontem', offset: -1 },
-                      { label: 'Hoje', offset: 0 },
-                      { label: 'Amanhã', offset: 1 },
-                    ].map(({ label, offset }) => (
+                      { label: 'Hoje', value: 'today' as const, offset: 0 },
+                      { label: 'Amanhã', value: 'tomorrow' as const, offset: 1 },
+                    ].map(({ label, value, offset }) => (
                       <button
                         key={label}
                         type="button"
-                        onClick={() => setForm({ ...form, dueDate: dateInputValueFromToday(offset) })}
-                        className="rounded-md px-1.5 py-1 text-xs font-medium text-slate-600 hover:bg-pink-50 hover:text-pink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500"
+                        aria-pressed={dueDateShortcut === value}
+                        onClick={() => {
+                          setForm({ ...form, dueDate: dateInputValueFromToday(offset) })
+                          setDueDateShortcut(value)
+                        }}
+                        className={`h-5 rounded px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${
+                          dueDateShortcut === value
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'
+                        }`}
                       >
                         {label}
                       </button>
                     ))}
                   </div>
                 </div>
-                <input id="task-due-date" type="date" required={form.dueTimeEnabled} value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                <input
+                  id="task-due-date"
+                  type="date"
+                  required={form.dueTimeEnabled}
+                  value={form.dueDate}
+                  onChange={(event) => {
+                    const dueDate = event.target.value
+                    setForm({ ...form, dueDate })
+                    setDueDateShortcut(dueDate === dateInputValueFromToday(0)
+                      ? 'today'
+                      : dueDate === dateInputValueFromToday(1)
+                        ? 'tomorrow'
+                        : null)
+                  }}
                   className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
                 <label htmlFor="task-due-time-enabled" className="mt-2 flex items-center gap-2 text-sm font-medium">
                   <input
