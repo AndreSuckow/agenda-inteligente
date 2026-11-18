@@ -322,7 +322,25 @@ function PunctualityChart({ buckets, granularity, className }: {
               />
               <ChartTooltip
                 cursor={false}
-                content={<ChartTooltipContent indicator="line" formatter={(value, name) => [`${Number(value).toFixed(0)}%`, name]} />}
+                content={(
+                  <ChartTooltipContent
+                    indicator="line"
+                    formatter={(value, name) => {
+                      const label = name === 'onTimeRate'
+                        ? punctualityChartConfig.onTimeRate.label
+                        : name === 'lateRate'
+                          ? punctualityChartConfig.lateRate.label
+                          : name
+
+                      return (
+                        <span className="flex items-center gap-2">
+                          <span>{`${Number(value).toFixed(0)}%`}</span>
+                          <span>{label}</span>
+                        </span>
+                      )
+                    }}
+                  />
+                )}
               />
               <ChartLegend content={<ChartLegendContent />} />
               <Bar dataKey="onTimeRate" stackId="punctuality" fill={`url(#${gradientId}-ontime)`} />
