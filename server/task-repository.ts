@@ -1,6 +1,7 @@
 import { db } from './db.js'
 import type { Priority, Recurrence, Subtask, Task, TaskStatus } from './business-rules.js'
 import { parseDescription } from './subtask-rules.js'
+import { normalizeTaskTags } from '../shared/task-tag-rules.js'
 
 type TaskRow = {
   id: number
@@ -33,7 +34,7 @@ function toSubtask(row: SubtaskRow): Subtask {
   }
 }
 
-function toTask(row: TaskRow, savedSubtasks: Subtask[] = []): Task {
+function toTask(row: TaskRow, savedSubtasks: Subtask[] = [], tags: string[] = []): Task {
   const legacyDescription = parseDescription(row.description ?? undefined)
   const usesLegacyDescription = savedSubtasks.length === 0 && legacyDescription.subtaskTitles.length > 0
   const subtasks = usesLegacyDescription
@@ -49,6 +50,7 @@ function toTask(row: TaskRow, savedSubtasks: Subtask[] = []): Task {
     id: row.id,
     title: row.title,
     description: usesLegacyDescription ? legacyDescription.description ?? null : row.description,
+    tags,
     dueDate: row.due_date,
     priority: row.priority,
     status: row.status,
@@ -106,6 +108,40 @@ function insertSubtasks(taskId: number, titles: string[], completed = false) {
   })
 }
 
+function getSavedTags(taskId: number) {
+  const rows = db.prepare(`
+    SELECT tag
+    FROM task_tags
+    WHERE task_id = ?
+    ORDER BY position
+  `).all(taskId) as Array<{ tag: string }>
+  return rows.map((row) => row.tag)
+}
+
+function getSavedTagsByTask() {
+  const rows = db.prepare(`
+    SELECT task_id, tag
+    FROM task_tags
+    ORDER BY task_id, position
+  `).all() as Array<{ task_id: number; tag: string }>
+  const tagsByTask = new Map<number, string[]>()
+  for (const row of rows) {
+    const taskTags = tagsByTask.get(row.task_id) ?? []
+    taskTags.push(row.tag)
+    tagsByTask.set(row.task_id, taskTags)
+  }
+  return tagsByTask
+}
+
+function replaceTags(taskId: number, tags: string[]) {
+  db.prepare('DELETE FROM task_tags WHERE task_id = ?').run(taskId)
+  const insert = db.prepare(`
+    INSERT INTO task_tags (task_id, tag, position)
+    VALUES (?, ?, ?)
+  `)
+  normalizeTaskTags(tags).forEach((tag, position) => insert.run(taskId, tag, position))
+}
+
 function replaceSubtasks(
   taskId: number,
   titles: string[],
@@ -146,17 +182,19 @@ export function listTasks(): Task[] {
       id DESC
   `).all() as TaskRow[]
   const subtasksByTask = getSavedSubtasksByTask()
-  return rows.map((row) => toTask(row, subtasksByTask.get(row.id)))
+  const tagsByTask = getSavedTagsByTask()
+  return rows.map((row) => toTask(row, subtasksByTask.get(row.id), tagsByTask.get(row.id)))
 }
 
 export function findTask(id: number) {
   const row = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
-  return row ? toTask(row, getSavedSubtasks(id)) : null
+  return row ? toTask(row, getSavedSubtasks(id), getSavedTags(id)) : null
 }
 
 export function createTask(input: {
   title: string
   description?: string
+  tags?: string[]
   dueDate?: string
   priority: Priority
   recurrence: Recurrence
@@ -175,6 +213,7 @@ export function createTask(input: {
     )
     const taskId = Number(result.lastInsertRowid)
     insertSubtasks(taskId, parsedDescription.subtaskTitles)
+    replaceTags(taskId, input.tags ?? [])
     return taskId
   })
   return findTask(create())
@@ -183,6 +222,7 @@ export function createTask(input: {
 export function updateTask(id: number, input: {
   title: string
   description?: string
+  tags?: string[]
   dueDate?: string
   priority: Priority
   status: TaskStatus
@@ -218,6 +258,7 @@ export function updateTask(id: number, input: {
       input.status === 'completed',
       shouldResetSubtasks,
     )
+    if (input.tags !== undefined) replaceTags(id, input.tags)
     if (shouldCreateNextOccurrence) createNextOccurrence(id)
   })
   update()
@@ -290,7 +331,9 @@ function createNextOccurrence(taskId: number) {
     INSERT INTO tasks (title, description, due_date, priority, recurrence)
     VALUES (?, ?, ?, ?, ?)
   `).run(task.title, task.description, nextDueDate, task.priority, task.recurrence)
-  insertSubtasks(Number(result.lastInsertRowid), task.subtasks.map((subtask) => subtask.title))
+  const nextTaskId = Number(result.lastInsertRowid)
+  insertSubtasks(nextTaskId, task.subtasks.map((subtask) => subtask.title))
+  replaceTags(nextTaskId, task.tags)
 }
 
 export function deleteTask(id: number) {

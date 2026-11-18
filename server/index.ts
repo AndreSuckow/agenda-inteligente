@@ -11,6 +11,7 @@ import {
 } from './task-repository.js'
 import { parseVoiceCommand } from './business-rules.js'
 import { MAX_SUBTASKS, MAX_SUBTASK_TITLE_LENGTH, parseDescription } from './subtask-rules.js'
+import { MAX_TASK_TAG_LENGTH, MAX_TASK_TAGS, normalizeTaskTags } from '../shared/task-tag-rules.js'
 import {
   createBirthday,
   deleteBirthday,
@@ -27,6 +28,8 @@ app.use(express.json({ limit: '100kb' }))
 const taskInputSchema = z.object({
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1000).optional(),
+  tags: z.array(z.string().trim().min(1).max(MAX_TASK_TAG_LENGTH)).max(MAX_TASK_TAGS).optional()
+    .transform((tags) => tags ? normalizeTaskTags(tags) : undefined),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   priority: z.enum(['low', 'medium', 'high']),
   status: z.enum(['pending', 'completed']).optional(),
@@ -63,6 +66,7 @@ app.post('/api/tasks', (request, response, next) => {
     const task = createTask({
       title: input.title,
       description: input.description,
+      tags: input.tags ?? [],
       dueDate: input.dueDate,
       priority: input.priority,
       recurrence: input.recurrence,
@@ -89,6 +93,7 @@ app.put('/api/tasks/:id', (request, response, next) => {
     const task = updateTask(id, {
       title: input.title,
       description: input.description,
+      tags: input.tags,
       dueDate: input.dueDate,
       priority: input.priority,
       status: input.status ?? 'pending',

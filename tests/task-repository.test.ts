@@ -35,6 +35,7 @@ test('completing every subtask completes the parent and creates a fresh recurrin
   const task = createTask({
     title: 'Recurring parent completion test',
     description: 'Notes\n- First step\n- Second step',
+    tags: ['Work', 'Planning'],
     dueDate: '2031-02-03',
     priority: 'high',
     recurrence: 'weekly',
@@ -57,8 +58,30 @@ test('completing every subtask completes the parent and creates a fresh recurrin
   )
   assert.ok(nextOccurrence)
   assert.equal(nextOccurrence.dueDate, '2031-02-10')
+  assert.deepEqual(nextOccurrence.tags, ['Work', 'Planning'])
   assert.deepEqual(nextOccurrence.subtasks.map((subtask) => subtask.title), ['First step', 'Second step'])
   assert.deepEqual(nextOccurrence.subtasks.map((subtask) => subtask.completed), [false, false])
+})
+
+test('task tags are normalized, persisted and replaced when the task is edited', () => {
+  const task = createTask({
+    title: 'Tagged task test',
+    tags: ['  Work ', 'Personal', 'work'],
+    priority: 'medium',
+    recurrence: 'none',
+  })
+  assert.ok(task)
+  assert.deepEqual(task.tags, ['Work', 'Personal'])
+
+  const updated = updateTask(task.id, {
+    title: task.title,
+    tags: ['Planning'],
+    priority: task.priority,
+    status: task.status,
+    recurrence: task.recurrence,
+  })
+  assert.ok(updated)
+  assert.deepEqual(updated.tags, ['Planning'])
 })
 
 test('adding recurrence to a task with subtasks carries them into its next occurrence', () => {

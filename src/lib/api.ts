@@ -3,12 +3,14 @@ import type { Priority, Recurrence, Subtask, Task, TaskStatus } from '../../serv
 import { parseVoiceCommand } from '../../server/business-rules.js'
 import { calculateBirthdayDetails } from '../../shared/birthday-rules.js'
 import { MAX_SUBTASKS, MAX_SUBTASK_TITLE_LENGTH, parseDescription } from '../../shared/subtask-rules.js'
+import { MAX_TASK_TAG_LENGTH, MAX_TASK_TAGS, normalizeTaskTags } from '../../shared/task-tag-rules.js'
 import { isSupabaseConfigured, supabase } from './supabase'
 
 type TaskRow = {
   id: number
   title: string
   description: string | null
+  tags: string[]
   due_date: string | null
   priority: Priority
   status: TaskStatus
@@ -56,6 +58,8 @@ export type DueReminder = {
 const taskInputSchema = z.object({
   title: z.string().trim().min(1).max(120),
   description: z.string().trim().max(1000).optional(),
+  tags: z.array(z.string().trim().min(1).max(MAX_TASK_TAG_LENGTH)).max(MAX_TASK_TAGS).optional()
+    .transform((tags) => tags ? normalizeTaskTags(tags) : undefined),
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   priority: z.enum(['low', 'medium', 'high']),
   status: z.enum(['pending', 'completed']).optional(),
@@ -105,6 +109,7 @@ function mapTask(row: TaskRow, subtasks: Subtask[] = []): Task {
     id: row.id,
     title: row.title,
     description: row.description,
+    tags: row.tags ?? [],
     dueDate: row.due_date,
     priority: row.priority,
     status: row.status,
@@ -184,6 +189,7 @@ async function saveTask(id: number | null, inputValue: unknown): Promise<Task | 
     p_task_id: id,
     p_title: input.title,
     p_description: description ?? null,
+    p_tags: input.tags ?? null,
     p_due_date: input.dueDate ?? null,
     p_priority: input.priority,
     p_status: id === null ? 'pending' : input.status ?? 'pending',

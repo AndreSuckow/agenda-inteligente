@@ -35,6 +35,12 @@ function dateKeyFromTimestamp(timestamp: string) {
   return Number.isNaN(date.getTime()) ? null : localDateKey(date)
 }
 
+export function isCompletedAfterDueDate(dueDate: string | null, completedAt: string | null) {
+  if (!dueDate || !completedAt) return false
+  const completedDate = dateKeyFromTimestamp(completedAt)
+  return completedDate !== null && completedDate > dueDate
+}
+
 function bucketKey(dateKey: string, granularity: DashboardGranularity) {
   if (granularity === 'year') return dateKey.slice(0, 4)
   if (granularity === 'month') return dateKey.slice(0, 7)
@@ -101,7 +107,7 @@ export function getDashboardSummary(tasks: Task[], granularity: DashboardGranula
     completedBucket.completed += 1
     if (!task.dueDate) continue
     completedBucket.completedWithDueDate += 1
-    if (completedDate > task.dueDate) {
+    if (isCompletedAfterDueDate(task.dueDate, task.completedAt)) {
       completedBucket.lateCompleted += 1
     } else {
       completedBucket.onTimeCompleted += 1

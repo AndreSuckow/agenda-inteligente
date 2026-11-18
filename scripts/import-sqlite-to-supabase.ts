@@ -38,6 +38,11 @@ type LocalReminder = {
   notified_at: string
 }
 
+type LocalTaskTag = {
+  task_id: number
+  tag: string
+}
+
 function requiredEnvironmentValue(name: string) {
   const value = process.env[name]
   if (!value) throw new Error(`Defina ${name} antes de executar a importação.`)
@@ -82,6 +87,11 @@ async function main() {
       FROM task_subtasks
       ORDER BY task_id, position
     `).all() as LocalSubtask[]
+    const taskTags = db.prepare(`
+      SELECT task_id, tag
+      FROM task_tags
+      ORDER BY task_id, position
+    `).all() as LocalTaskTag[]
     const birthdays = db.prepare(`
       SELECT id, name, birth_date, relationship, created_at, updated_at
       FROM birthdays
@@ -94,11 +104,19 @@ async function main() {
     `).all() as LocalReminder[]
 
     const taskIds = new Map<number, number>()
+    const tagsByTask = new Map<number, string[]>()
+    for (const { task_id: taskId, tag } of taskTags) {
+      const tags = tagsByTask.get(taskId) ?? []
+      tags.push(tag)
+      tagsByTask.set(taskId, tags)
+    }
+
     for (const task of tasks) {
       const { data, error } = await client.from('tasks').insert({
         user_id: targetUserId,
         title: task.title,
         description: task.description,
+        tags: tagsByTask.get(task.id) ?? [],
         due_date: task.due_date,
         priority: task.priority,
         status: task.status,

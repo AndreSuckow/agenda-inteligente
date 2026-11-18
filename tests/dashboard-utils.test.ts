@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { Task } from '../server/business-rules.js'
-import { getDashboardSummary } from '../src/dashboard-utils.js'
+import { getDashboardSummary, isCompletedAfterDueDate } from '../src/dashboard-utils.js'
 
 function makeTask(overrides: Partial<Task> & Pick<Task, 'id'>): Task {
   return {
     id: overrides.id,
     title: `Task ${overrides.id}`,
     description: null,
+    tags: [],
     dueDate: null,
     priority: 'medium',
     status: 'pending',
@@ -73,4 +74,11 @@ test('groups activity by the date it was created and the date it was completed',
   assert.equal(creationDay?.completed, 0)
   assert.equal(completionDay?.created, 0)
   assert.equal(completionDay?.completed, 1)
+})
+
+test('identifies completed tasks finished after their due date', () => {
+  assert.equal(isCompletedAfterDueDate('2026-11-18', '2026-11-19T13:00:00'), true)
+  assert.equal(isCompletedAfterDueDate('2026-11-19', '2026-11-19T23:59:00'), false)
+  assert.equal(isCompletedAfterDueDate(null, '2026-11-19T13:00:00'), false)
+  assert.equal(isCompletedAfterDueDate('2026-11-18', null), false)
 })

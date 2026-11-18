@@ -434,7 +434,7 @@ export default function Dashboard({ tasks, onCreateTask }: DashboardProps) {
               ))}
             </SelectContent>
           </Select>
-          <Button size="lg" onClick={onCreateTask} className="h-9 rounded-lg bg-indigo-500 px-3 text-white hover:bg-indigo-400">
+          <Button size="lg" onClick={onCreateTask} className="add-activity-button h-9 rounded-lg px-3 hover:opacity-90">
             <Plus size={16} strokeWidth={1.75} />
             Nova tarefa
           </Button>

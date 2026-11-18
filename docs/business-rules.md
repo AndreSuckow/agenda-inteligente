@@ -10,6 +10,10 @@ Linhas da descrição iniciadas por `- ` são subtarefas; as demais linhas perma
 
 Os valores são `low`, `medium` e `high`, com rótulos Baixa, Média e Alta. A listagem coloca pendentes primeiro e depois ordena por prioridade, prazo e ID.
 
+## Tags
+
+Cada atividade pode ter até 10 tags livres, com até 30 caracteres cada. Tags são aparadas, não diferenciam maiúsculas de minúsculas para detectar duplicatas, aparecem na lista e também podem ser encontradas pela busca geral. Novas ocorrências recorrentes recebem as mesmas tags.
+
 ## Atraso
 
 Uma atividade está atrasada quando possui prazo, está pendente e o instante atual excede o fim do dia informado. O campo de prazo não contém horário.
@@ -18,9 +22,9 @@ Uma atividade está atrasada quando possui prazo, está pendente e o instante at
 
 A visualização mensal posiciona atividades no dia do prazo (`due_date`), usa semanas iniciadas na segunda-feira e permite navegar entre meses. Títulos longos são divididos em linhas de até 20 caracteres e podem avançar sobre dias seguintes vazios da mesma semana; uma atividade no dia seguinte bloqueia essa expansão. Sábados e domingos têm destaque leve. Feriados nacionais fixos e datas móveis brasileiras comuns (Carnaval, Sexta-feira Santa e Corpus Christi) recebem destaque próprio. Feriados estaduais e municipais não são calculados. Atividades sem prazo aparecem em uma seção separada. Ao entrar no calendário, filtros da lista são limpos e a visualização mostra atividades não excluídas.
 
-## Horário de criação
+## Filtros por data de criação
 
-O SQLite grava `created_at` em UTC. A API entrega esse instante em formato ISO 8601 com fuso explícito; a interface exibe no fuso local do navegador. Os filtros “Criada a partir de” e “Criada até” usam data e hora locais e incluem o minuto selecionado no limite final.
+O SQLite grava `created_at` em UTC. A API entrega esse instante em formato ISO 8601 com fuso explícito; a interface exibe no fuso local do navegador. Os filtros “Criada a partir de” e “Criada até” usam datas locais e incluem o dia inteiro em ambos os limites. As alterações só são aplicadas ao pressionar “Buscar”.
 
 ## Dashboard e indicadores
 

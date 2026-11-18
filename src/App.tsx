@@ -1,6 +1,6 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { BarChart3, CalendarDays, Gift, List, LogOut, MicOff, Plus, Search, Trash2, X } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronDown, Gift, List, LogOut, MicOff, Moon, Plus, Search, Sun, Trash2, X } from 'lucide-react'
 import type { Session } from '@supabase/supabase-js'
 import type { Priority, Recurrence, Subtask, Task, TaskStatus } from '../server/business-rules'
 import MonthCalendar from './components/MonthCalendar'
@@ -10,12 +10,16 @@ import { toast, Toaster } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { apiRequest } from './lib/api'
 import { isSupabaseConfigured, supabase, supabaseConfigError } from './lib/supabase'
+import { isCompletedAfterDueDate } from './dashboard-utils'
+import { MAX_TASK_TAG_LENGTH, MAX_TASK_TAGS, normalizeTaskTags } from '../shared/task-tag-rules'
 
 const Dashboard = lazy(() => import('./components/Dashboard'))
+type TaskFilter = 'all' | 'active' | 'overdue' | 'overdue-completed' | TaskStatus | 'deleted'
 
 const emptyForm = {
   title: '',
   description: '',
+  tags: [] as string[],
   dueDate: '',
   priority: 'medium' as Priority,
   recurrence: 'none' as Recurrence,
@@ -29,6 +33,16 @@ function priorityLabel(priority: Priority) {
 function formatDate(date: string | null) {
   if (!date) return 'Sem prazo'
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(`${date}T12:00:00`))
+}
+
+function dateInputValueFromToday(offsetDays: number) {
+  const date = new Date()
+  date.setDate(date.getDate() + offsetDays)
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
 }
 
 function formatTimestamp(timestamp: string) {
@@ -53,20 +67,55 @@ function isOverdue(task: Task) {
   return new Date(`${task.dueDate}T23:59:59`).getTime() < Date.now()
 }
 
+function readInitialPreferences() {
+  if (isSupabaseConfigured) return { theme: 'dark' as const, error: '' }
+  try {
+    return {
+      theme: window.localStorage.getItem('agenda-inteligente-theme') === 'light' ? 'light' as const : 'dark' as const,
+      error: '',
+    }
+  } catch (storageError) {
+    return {
+      theme: 'dark' as const,
+      error: `Não foi possível carregar a preferência de tema: ${storageError instanceof Error ? storageError.message : 'Erro inesperado.'}`,
+    }
+  }
+}
+
+function ProfileAvatar({ picture, name }: { picture: string; name: string }) {
+  const [pictureFailed, setPictureFailed] = useState(false)
+  if (picture && !pictureFailed) {
+    return <img src={picture} alt="" onError={() => setPictureFailed(true)} className="size-9 rounded-full object-cover" />
+  }
+  return (
+    <span className="grid size-9 place-items-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
+      {name.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
 function App() {
+  const [initialPreferences] = useState(readInitialPreferences)
   const [tasks, setTasks] = useState<Task[]>([])
   const [session, setSession] = useState<Session | null>(null)
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured)
   const [authBusy, setAuthBusy] = useState(false)
   const [authError, setAuthError] = useState('')
+  const [theme, setTheme] = useState<'dark' | 'light'>(initialPreferences.theme)
   const [form, setForm] = useState(emptyForm)
+  const [tagInput, setTagInput] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'active' | TaskStatus | 'deleted'>('active')
+  const [filter, setFilter] = useState<TaskFilter>('active')
+  const [selectedTag, setSelectedTag] = useState('')
   const [createdAfter, setCreatedAfter] = useState('')
   const [createdBefore, setCreatedBefore] = useState('')
+  const [appliedCreatedAfter, setAppliedCreatedAfter] = useState('')
+  const [appliedCreatedBefore, setAppliedCreatedBefore] = useState('')
   const [view, setView] = useState<'list' | 'calendar' | 'birthdays' | 'dashboard'>('list')
+  const profileMenuRef = useRef<HTMLDetailsElement>(null)
   const [calendarAddOpen, setCalendarAddOpen] = useState(false)
+  const [mobileTaskFormOpen, setMobileTaskFormOpen] = useState(false)
   const [calendarMonth, setCalendarMonth] = useState(() => new Date())
   const [todayKey] = useState(() => {
     const today = new Date()
@@ -76,8 +125,42 @@ function App() {
       String(today.getDate()).padStart(2, '0'),
     ].join('-')
   })
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialPreferences.error)
   const [voiceMessage, setVoiceMessage] = useState('Comandos de voz desativados temporariamente para melhorias.')
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#282a36' : '#f8fafc')
+  }, [theme])
+
+  useEffect(() => {
+    const closeProfileMenuOnOutsideClick = (event: PointerEvent) => {
+      const menu = profileMenuRef.current
+      if (menu && event.target instanceof Node && !menu.contains(event.target)) menu.open = false
+    }
+    const closeProfileMenuOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && profileMenuRef.current) profileMenuRef.current.open = false
+    }
+    document.addEventListener('pointerdown', closeProfileMenuOnOutsideClick)
+    document.addEventListener('keydown', closeProfileMenuOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeProfileMenuOnOutsideClick)
+      document.removeEventListener('keydown', closeProfileMenuOnEscape)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!mobileTaskFormOpen) return
+    const closeTaskFormOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileTaskFormOpen(false)
+        setForm(emptyForm)
+        setEditingId(null)
+      }
+    }
+    document.addEventListener('keydown', closeTaskFormOnEscape)
+    return () => document.removeEventListener('keydown', closeTaskFormOnEscape)
+  }, [mobileTaskFormOpen])
 
   useEffect(() => {
     if (!supabase) return
@@ -86,6 +169,8 @@ function App() {
       if (!active) return
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') setTasks([])
       setSession(nextSession)
+      const savedTheme = nextSession?.user.user_metadata.theme
+      setTheme(savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark')
       setAuthLoading(false)
       setAuthError('')
     })
@@ -93,6 +178,8 @@ function App() {
       if (!active) return
       if (sessionError) setAuthError(sessionError.message)
       setSession(data.session)
+      const savedTheme = data.session?.user.user_metadata.theme
+      setTheme(savedTheme === 'light' || savedTheme === 'dark' ? savedTheme : 'dark')
       setAuthLoading(false)
     }).catch((sessionError: unknown) => {
       if (!active) return
@@ -162,10 +249,20 @@ function App() {
     }
   }
 
+  const availableTags = useMemo(() => {
+    const tagsByKey = new Map<string, string>()
+    for (const task of tasks) {
+      for (const tag of task.tags) {
+        if (!tagsByKey.has(tag.toLowerCase())) tagsByKey.set(tag.toLowerCase(), tag)
+      }
+    }
+    return [...tagsByKey.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [tasks])
+
   const filteredTasks = useMemo(() => {
     const query = search.toLowerCase()
-    const createdAfterTimestamp = createdAfter ? new Date(createdAfter).getTime() : null
-    const createdBeforeTimestamp = createdBefore ? new Date(createdBefore).getTime() + 59_999 : null
+    const createdAfterTimestamp = appliedCreatedAfter ? new Date(`${appliedCreatedAfter}T00:00:00`).getTime() : null
+    const createdBeforeTimestamp = appliedCreatedBefore ? new Date(`${appliedCreatedBefore}T23:59:59.999`).getTime() : null
     return tasks.filter((task) =>
       (filter === 'all'
         ? true
@@ -173,30 +270,103 @@ function App() {
           ? !task.deletedAt
           : filter === 'deleted'
             ? Boolean(task.deletedAt)
-            : task.status === filter && !task.deletedAt) &&
+            : filter === 'overdue'
+              ? !task.deletedAt && isOverdue(task)
+              : filter === 'overdue-completed'
+                ? !task.deletedAt && isCompletedAfterDueDate(task.dueDate, task.completedAt)
+                : task.status === filter && !task.deletedAt) &&
+      (!selectedTag || task.tags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase())) &&
       (createdAfterTimestamp === null || new Date(task.createdAt).getTime() >= createdAfterTimestamp) &&
       (createdBeforeTimestamp === null || new Date(task.createdAt).getTime() <= createdBeforeTimestamp) &&
-      (`${task.title} ${task.description ?? ''} ${task.id}`.toLowerCase().includes(query)),
+      (`${task.title} ${task.description ?? ''} ${task.tags.join(' ')} ${task.id}`.toLowerCase().includes(query)),
     )
-  }, [tasks, search, filter, createdAfter, createdBefore])
+  }, [tasks, search, filter, selectedTag, appliedCreatedAfter, appliedCreatedBefore])
+
+  const addTaskTag = () => {
+    const tag = tagInput.trim()
+    if (!tag) return
+    if (tag.length > MAX_TASK_TAG_LENGTH) {
+      setError(`Cada tag pode ter no máximo ${MAX_TASK_TAG_LENGTH} caracteres.`)
+      return
+    }
+    if (form.tags.some((savedTag) => savedTag.toLowerCase() === tag.toLowerCase())) {
+      setTagInput('')
+      return
+    }
+    if (form.tags.length >= MAX_TASK_TAGS) {
+      setError(`A atividade pode ter no máximo ${MAX_TASK_TAGS} tags.`)
+      return
+    }
+    setForm({ ...form, tags: normalizeTaskTags([...form.tags, tag]) })
+    setTagInput('')
+    setError('')
+  }
 
   const resetForm = () => {
     setForm(emptyForm)
+    setTagInput('')
     setEditingId(null)
     setCalendarAddOpen(false)
+    setMobileTaskFormOpen(false)
   }
 
   const openCalendarView = () => {
     setSearch('')
     setFilter('active')
+    setSelectedTag('')
     setCreatedAfter('')
     setCreatedBefore('')
+    setAppliedCreatedAfter('')
+    setAppliedCreatedBefore('')
+    setMobileTaskFormOpen(false)
     setView('calendar')
+  }
+
+  const navigateTo = (nextView: 'list' | 'calendar' | 'birthdays' | 'dashboard') => {
+    setMobileTaskFormOpen(false)
+    if (nextView === 'calendar') openCalendarView()
+    else setView(nextView)
+  }
+
+  const openNewTaskFromToolbar = () => {
+    setView('list')
+    setForm(emptyForm)
+    setTagInput('')
+    setEditingId(null)
+    setCalendarAddOpen(false)
+    setMobileTaskFormOpen(true)
+    setError('')
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        document.getElementById('task-title')?.focus()
+      })
+    })
+  }
+
+  const changeTheme = async () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark'
+    try {
+      if (isSupabaseConfigured && session && supabase) {
+        const { error: updateError } = await supabase.auth.updateUser({ data: { theme: nextTheme } })
+        if (updateError) throw updateError
+      } else {
+        window.localStorage.setItem('agenda-inteligente-theme', nextTheme)
+      }
+      setTheme(nextTheme)
+      setError('')
+      toast.success(`Tema ${nextTheme === 'dark' ? 'escuro' : 'claro'} ativado.`, { duration: 2000 })
+    } catch (themeError) {
+      const message = themeError instanceof Error ? themeError.message : 'Erro inesperado.'
+      setError(`Não foi possível salvar a preferência de tema: ${message}`)
+      toast.error('Não foi possível salvar a preferência de tema.')
+    }
   }
 
   const openCalendarForm = () => {
     setForm(emptyForm)
+    setTagInput('')
     setEditingId(null)
+    setMobileTaskFormOpen(false)
     setError('')
     setCalendarAddOpen(true)
   }
@@ -204,8 +374,10 @@ function App() {
   const openNewTaskFromDashboard = () => {
     setView('list')
     setForm(emptyForm)
+    setTagInput('')
     setEditingId(null)
     setCalendarAddOpen(false)
+    setMobileTaskFormOpen(!window.matchMedia('(min-width: 1024px)').matches)
     setError('')
     toast.success('Formulário de nova tarefa aberto.')
   }
@@ -217,6 +389,7 @@ function App() {
       const payload = {
         title: form.title,
         description: form.description || undefined,
+        tags: form.tags,
         dueDate: form.dueDate || undefined,
         priority: form.priority,
         recurrence: form.recurrence,
@@ -236,15 +409,18 @@ function App() {
 
   const editTask = (task: Task) => {
     setEditingId(task.id)
+    setTagInput('')
     setForm({
       title: task.title,
       description: descriptionForForm(task),
+      tags: task.tags,
       dueDate: task.dueDate ?? '',
       priority: task.priority,
       recurrence: task.recurrence,
       status: task.status,
     })
     if (view === 'calendar') setCalendarAddOpen(true)
+    else if (!window.matchMedia('(min-width: 1024px)').matches) setMobileTaskFormOpen(true)
   }
 
   const deleteTask = async (id: number) => {
@@ -268,6 +444,7 @@ function App() {
         body: JSON.stringify({
           title: task.title,
           description: descriptionForForm(task) || undefined,
+          tags: task.tags,
           dueDate: task.dueDate ?? undefined,
           priority: task.priority,
           recurrence: task.recurrence,
@@ -292,6 +469,16 @@ function App() {
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível atualizar a subtarefa.')
     }
   }
+
+  const profileName = session
+    ? String(session.user.user_metadata.full_name ?? session.user.user_metadata.name ?? session.user.email ?? 'Sua conta')
+    : 'Sua conta'
+  const profilePicture = session
+    ? String(session.user.user_metadata.picture ?? session.user.user_metadata.avatar_url ?? '')
+    : ''
+
+  const mobileTaskDialogOpen = view === 'list' && mobileTaskFormOpen
+  const taskFormIsDialog = mobileTaskDialogOpen || (view === 'calendar' && calendarAddOpen)
 
   if (supabaseConfigError || (import.meta.env.PROD && !isSupabaseConfigured)) {
     return (
@@ -319,13 +506,13 @@ function App() {
   }
 
   return (
-    <main className="theme-dark min-h-screen bg-background text-foreground">
-      <Toaster position="top-right" theme="dark" richColors />
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
+    <main className={`theme-${theme} min-h-screen bg-background pb-[calc(8.5rem+env(safe-area-inset-bottom))] text-foreground lg:pb-0`}>
+      <Toaster position="top-right" theme={theme} richColors />
+      <header className="relative z-30 border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-6 sm:py-4">
           <button
             type="button"
-            onClick={() => setView('list')}
+            onClick={() => navigateTo('list')}
             aria-label="Voltar para a tela inicial"
             className="flex items-center gap-3 rounded-lg text-left transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
@@ -333,54 +520,46 @@ function App() {
               <CalendarDays size={22} />
             </div>
             <div className="min-w-0">
-              <h1 className="whitespace-nowrap text-lg font-bold">Agenda Inteligente</h1>
-              <p className="text-xs text-slate-500">Organize suas atividades</p>
+              <h1 className="whitespace-nowrap text-base font-bold text-indigo-700 sm:text-lg">Agenda Inteligente</h1>
+              <p className="hidden text-xs text-indigo-700 sm:block">Organize suas atividades</p>
             </div>
           </button>
-          {view !== 'dashboard' && (
-            <button
-              type="button"
-              disabled
-              aria-label="Comandos de voz desativados"
-              title="Comandos de voz temporariamente desativados para melhorias."
-              className="hidden cursor-not-allowed items-center gap-2 rounded-full bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-500 sm:flex"
-            >
-              <MicOff size={17} />
-              Voz desativada para melhorias
-            </button>
-          )}
-          {view !== 'list' && (
-            <button
-              type="button"
-              onClick={() => setView('list')}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Lista
-            </button>
-          )}
-          {isSupabaseConfigured && session && (
-            <div className="flex items-center gap-2">
-              <span className="hidden max-w-48 truncate text-xs text-slate-500 md:block">{session.user.email}</span>
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                aria-label="Sair da conta"
-                title="Sair da conta"
-                className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-2 text-sm text-slate-600 hover:bg-slate-50"
-              >
-                <LogOut size={16} />
-                <span className="hidden sm:inline">Sair</span>
+          <nav aria-label="Navegação principal" className="hidden items-center gap-1 lg:flex">
+            <button type="button" onClick={() => navigateTo('list')} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${view === 'list' ? 'bg-pink-50 text-pink-700' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'}`} aria-current={view === 'list' ? 'page' : undefined}><List size={16} /> Lista</button>
+            <button type="button" onClick={() => navigateTo('calendar')} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${view === 'calendar' ? 'bg-pink-50 text-pink-700' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'}`} aria-current={view === 'calendar' ? 'page' : undefined}><CalendarDays size={16} /> Calendário</button>
+            <button type="button" onClick={() => navigateTo('birthdays')} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${view === 'birthdays' ? 'bg-pink-50 text-pink-700' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'}`} aria-current={view === 'birthdays' ? 'page' : undefined}><Gift size={16} /> Aniversários</button>
+            <button type="button" onClick={() => navigateTo('dashboard')} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${view === 'dashboard' ? 'bg-pink-50 text-pink-700' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'}`} aria-current={view === 'dashboard' ? 'page' : undefined}><BarChart3 size={16} /> Dashboard</button>
+          </nav>
+          <details ref={profileMenuRef} className="group relative shrink-0">
+            <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg p-1.5 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+              <ProfileAvatar key={profilePicture} picture={profilePicture} name={profileName} />
+              <span className="hidden max-w-32 truncate text-left text-sm font-medium sm:block">{profileName}</span>
+              <ChevronDown size={16} className="hidden text-slate-500 sm:block" />
+            </summary>
+            <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+              <div className="mb-3 border-b border-slate-100 px-2 pb-3">
+                <p className="truncate text-sm font-semibold">{profileName}</p>
+                {session?.user.email && <p className="truncate text-xs text-slate-500">{session.user.email}</p>}
+              </div>
+              <button type="button" onClick={() => void changeTheme()} className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                Usar tema {theme === 'dark' ? 'claro' : 'escuro'}
               </button>
+              {session && (
+                <button type="button" onClick={() => void signOut()} className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                  <LogOut size={16} /> Sair da conta
+                </button>
+              )}
             </div>
-          )}
+          </details>
         </div>
       </header>
 
       <div className={view === 'calendar'
         ? 'mx-auto w-full max-w-[1920px] px-2 py-2 sm:px-4'
         : view === 'birthdays' || view === 'dashboard'
-          ? 'mx-auto max-w-7xl px-6 py-8'
-          : 'mx-auto grid max-w-7xl gap-6 px-6 py-8 lg:grid-cols-[360px_1fr]'}>
+          ? 'mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8'
+          : 'mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[360px_1fr]'}>
         {view === 'calendar' && calendarAddOpen && (
           <button
             type="button"
@@ -389,20 +568,35 @@ function App() {
             className="fixed inset-0 z-40 cursor-default bg-slate-950/30"
           />
         )}
+        {mobileTaskDialogOpen && (
+          <button
+            type="button"
+            aria-label="Fechar formulário de atividade"
+            onClick={resetForm}
+            className="fixed inset-0 z-40 cursor-default bg-slate-950/40 lg:hidden"
+          />
+        )}
         {view !== 'birthdays' && view !== 'dashboard' && (
-        <aside className={view === 'calendar'
+        <aside
+          id="task-form"
+          role={taskFormIsDialog ? 'dialog' : undefined}
+          aria-modal={taskFormIsDialog || undefined}
+          aria-labelledby="task-form-title"
+          className={view === 'calendar'
           ? calendarAddOpen
             ? 'fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl'
             : 'hidden'
-          : 'h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'}>
+          : mobileTaskFormOpen
+            ? 'fixed inset-2 z-50 max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:h-fit lg:overflow-visible lg:shadow-sm'
+            : 'hidden h-fit rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:block'}>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-bold">{editingId ? `Editar atividade #${editingId}` : 'Nova atividade'}</h2>
-            {view === 'calendar' && (
+            <h2 id="task-form-title" className="text-base font-bold">{editingId ? `Editar atividade #${editingId}` : 'Nova atividade'}</h2>
+            {(view === 'calendar' || mobileTaskDialogOpen) && (
               <button
                 type="button"
-                onClick={() => setCalendarAddOpen(false)}
+                onClick={view === 'calendar' ? () => setCalendarAddOpen(false) : resetForm}
                 aria-label="Fechar formulário"
-                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+                className={`rounded-lg p-2 text-slate-500 hover:bg-slate-100 ${mobileTaskDialogOpen ? 'lg:hidden' : ''}`}
               >
                 <X size={18} />
               </button>
@@ -412,7 +606,7 @@ function App() {
           <form onSubmit={saveTask} className="space-y-4">
             <label className="block text-sm font-medium">
               Título
-              <input required maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })}
+              <input id="task-title" required maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })}
                 className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
             </label>
             <label className="block text-sm font-medium">
@@ -425,16 +619,77 @@ function App() {
                 onChange={(event) => setForm({ ...form, description: event.target.value })}
                 className="mt-1.5 w-full resize-none rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
             </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-sm font-medium">
-                Prazo
-                <input type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
-              </label>
-              <label className="text-sm font-medium">
+            <div>
+              <label htmlFor="task-tag-input" className="block text-sm font-medium">Tags</label>
+              <div className="mt-1.5 flex gap-2">
+                <input
+                  id="task-tag-input"
+                  value={tagInput}
+                  maxLength={MAX_TASK_TAG_LENGTH}
+                  onChange={(event) => setTagInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ',') {
+                      event.preventDefault()
+                      addTaskTag()
+                    }
+                  }}
+                  placeholder="Digite uma tag e pressione Enter"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                />
+                <button
+                  type="button"
+                  onClick={addTaskTag}
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium hover:bg-slate-50"
+                >
+                  Adicionar
+                </button>
+              </div>
+              {form.tags.length > 0 && (
+                <div aria-label="Tags adicionadas" className="mt-2 flex flex-wrap gap-2">
+                  {form.tags.map((tag) => (
+                    <span key={tag.toLowerCase()} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => setForm({ ...form, tags: form.tags.filter((savedTag) => savedTag !== tag) })}
+                        aria-label={`Remover tag ${tag}`}
+                        className="rounded-full p-0.5 hover:bg-pink-100 hover:text-pink-700"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+              <div>
+                <div className="mb-1.5 flex flex-wrap items-center justify-between gap-1">
+                  <label htmlFor="task-due-date" className="text-sm font-medium">Prazo</label>
+                  <div role="group" aria-label="Atalhos rápidos de prazo" className="flex items-center gap-0.5">
+                    {[
+                      { label: 'Ontem', offset: -1 },
+                      { label: 'Hoje', offset: 0 },
+                      { label: 'Amanhã', offset: 1 },
+                    ].map(({ label, offset }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => setForm({ ...form, dueDate: dateInputValueFromToday(offset) })}
+                        className="rounded-md px-1.5 py-1 text-xs font-medium text-slate-600 hover:bg-pink-50 hover:text-pink-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input id="task-due-date" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                  className="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm" />
+              </div>
+              <label className="block text-sm font-medium">
                 Prioridade
                 <select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value as Priority })}
-                  className="mt-1.5 w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
+                  className="mt-1.5 block w-24 rounded-lg border border-slate-300 px-2 py-2 text-sm">
                   <option value="low">Baixa</option><option value="medium">Média</option><option value="high">Alta</option>
                 </select>
               </label>
@@ -456,7 +711,7 @@ function App() {
               </label>
             )}
             <div className="flex gap-2">
-              <button type="submit" className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+              <button type="submit" className="add-activity-button flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold hover:opacity-90">
                 <Plus size={16} /> {editingId ? 'Salvar alterações' : 'Adicionar'}
               </button>
               <button
@@ -506,54 +761,34 @@ function App() {
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por título, descrição ou ID"
                 className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-400" />
             </div>
-            <select value={filter} onChange={(event) => setFilter(event.target.value as 'all' | 'active' | TaskStatus | 'deleted')}
+            <select value={filter} onChange={(event) => setFilter(event.target.value as TaskFilter)}
               className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm">
               <option value="all">Todas</option>
               <option value="active">Ativas</option>
               <option value="pending">Pendentes</option>
               <option value="completed">Concluídas</option>
+              <option value="overdue">Atrasadas</option>
+              <option value="overdue-completed">Atrasadas concluídas</option>
               <option value="deleted">Excluídas</option>
             </select>
-            <div className="flex flex-wrap rounded-lg border border-slate-200 bg-white p-1">
-              <button
-                type="button"
-                onClick={() => setView('list')}
-                aria-pressed
-                className="flex items-center gap-1.5 rounded-md bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700"
-              >
-                <List size={16} /> Lista
-              </button>
-              <button
-                type="button"
-                onClick={openCalendarView}
-                aria-pressed={false}
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-              >
-                <CalendarDays size={16} /> Calendário
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('birthdays')}
-                aria-pressed={false}
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-pink-50 hover:text-pink-700"
-              >
-                <Gift size={16} /> Aniversários
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('dashboard')}
-                aria-pressed={false}
-                className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
-              >
-                <BarChart3 size={16} /> Dashboard
-              </button>
-            </div>
+            <select
+              aria-label="Filtrar por tag"
+              value={selectedTag}
+              onChange={(event) => setSelectedTag(event.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm"
+            >
+              <option value="">Todas as tags</option>
+              {selectedTag && !availableTags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase()) && (
+                <option value={selectedTag}>{selectedTag} (sem atividades)</option>
+              )}
+              {availableTags.map((tag) => <option key={tag.toLowerCase()} value={tag}>{tag}</option>)}
+            </select>
           </div>
           <div className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
             <label className="block text-xs font-medium text-slate-600">
               Criada a partir de
               <input
-                type="datetime-local"
+                type="date"
                 value={createdAfter}
                 onChange={(event) => setCreatedAfter(event.target.value)}
                 className="mt-1.5 w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-900"
@@ -562,24 +797,39 @@ function App() {
             <label className="block text-xs font-medium text-slate-600">
               Criada até
               <input
-                type="datetime-local"
+                type="date"
                 value={createdBefore}
                 onChange={(event) => setCreatedBefore(event.target.value)}
                 className="mt-1.5 w-full rounded-lg border border-slate-200 px-2 py-2 text-sm text-slate-900"
               />
             </label>
-            {(createdAfter || createdBefore) && (
+            <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
                 onClick={() => {
-                  setCreatedAfter('')
-                  setCreatedBefore('')
+                  setAppliedCreatedAfter(createdAfter)
+                  setAppliedCreatedBefore(createdBefore)
                 }}
-                className="rounded-lg px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+                className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500"
               >
-                Limpar período
+                <Search size={16} />
+                Buscar
               </button>
-            )}
+              {(createdAfter || createdBefore || appliedCreatedAfter || appliedCreatedBefore) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCreatedAfter('')
+                    setCreatedBefore('')
+                    setAppliedCreatedAfter('')
+                    setAppliedCreatedBefore('')
+                  }}
+                  className="rounded-lg px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+                >
+                  Limpar período
+                </button>
+              )}
+            </div>
           </div>
           <div className="space-y-3">
             {filteredTasks.map((task) => (
@@ -587,7 +837,8 @@ function App() {
                 <div className="flex items-start gap-3">
                   {!task.deletedAt && (
                     <button type="button" onClick={() => void toggleStatus(task)} aria-label={task.status === 'completed' ? 'Reabrir atividade' : 'Concluir atividade'}
-                      className={`mt-0.5 size-5 shrink-0 rounded-full border-2 ${task.status === 'completed' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`} />
+                      aria-pressed={task.status === 'completed'}
+                      className={`task-completion-toggle mt-0.5 size-5 shrink-0 rounded-full border-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${task.status === 'completed' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`} />
                   )}
                   <div className="min-w-0 flex-1">
                     <button type="button" onClick={() => editTask(task)} disabled={Boolean(task.deletedAt)}
@@ -601,9 +852,12 @@ function App() {
                         <span className={`rounded-full px-2 py-1 ${task.priority === 'high' ? 'bg-red-50 text-red-700' : task.priority === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
                           Prioridade {priorityLabel(task.priority)}
                         </span>
-                        <span className={`rounded-full px-2 py-1 ${isOverdue(task) ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
-                          {isOverdue(task) ? 'Atrasada · ' : ''}{formatDate(task.dueDate)}
+                        <span className={`rounded-full px-2 py-1 ${isOverdue(task) || isCompletedAfterDueDate(task.dueDate, task.completedAt) ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {isOverdue(task) ? 'Atrasada · ' : isCompletedAfterDueDate(task.dueDate, task.completedAt) ? 'Concluída com atraso · ' : ''}{formatDate(task.dueDate)}
                         </span>
+                        {task.tags.map((tag) => (
+                          <span key={tag.toLowerCase()} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">#{tag}</span>
+                        ))}
                         {task.recurrence !== 'none' && <span className="rounded-full bg-indigo-50 px-2 py-1 text-indigo-700">Recorrente</span>}
                         {task.subtasks.length > 0 && (
                           <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
@@ -659,7 +913,7 @@ function App() {
                 <button
                   type="button"
                   onClick={openCalendarForm}
-                  className="flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+                  className="add-activity-button flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium hover:opacity-90"
                 >
                   <Plus size={15} /> Adicionar atividade
                 </button>
@@ -674,6 +928,24 @@ function App() {
             </>
           )}
         </section>
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 px-4 pb-[env(safe-area-inset-bottom)] pt-3 backdrop-blur lg:hidden">
+        <div className="mx-auto max-w-lg space-y-2">
+          <div className="flex items-center gap-3">
+            <button id="mobile-task-create-button" type="button" onClick={openNewTaskFromToolbar} aria-haspopup="dialog" aria-expanded={mobileTaskDialogOpen} className="add-activity-button flex h-12 flex-1 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm hover:opacity-90">
+              <Plus size={19} /> Cadastrar tarefa
+            </button>
+            <button type="button" disabled aria-label="Comandos de voz desativados" title="Comandos de voz temporariamente desativados para melhorias." className="grid size-12 shrink-0 cursor-not-allowed place-items-center rounded-xl border border-slate-200 bg-slate-100 text-slate-500">
+              <MicOff size={19} />
+            </button>
+          </div>
+          <nav aria-label="Navegação principal" className="grid grid-cols-4 gap-1">
+            <button type="button" onClick={() => navigateTo('list')} aria-current={view === 'list' ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${view === 'list' ? 'bg-pink-50 text-pink-700' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'}`}><List size={17} />Lista</button>
+            <button type="button" onClick={() => navigateTo('calendar')} aria-current={view === 'calendar' ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${view === 'calendar' ? 'bg-pink-50 text-pink-700' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'}`}><CalendarDays size={17} />Calendário</button>
+            <button type="button" onClick={() => navigateTo('birthdays')} aria-current={view === 'birthdays' ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${view === 'birthdays' ? 'bg-pink-50 text-pink-700' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'}`}><Gift size={17} />Aniversários</button>
+            <button type="button" onClick={() => navigateTo('dashboard')} aria-current={view === 'dashboard' ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-500 ${view === 'dashboard' ? 'bg-pink-50 text-pink-700' : 'text-slate-600 hover:bg-pink-50 hover:text-pink-700'}`}><BarChart3 size={17} />Dashboard</button>
+          </nav>
+        </div>
       </div>
     </main>
   )
