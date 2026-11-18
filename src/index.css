@@ -1,0 +1,336 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --chart-grid-color: #e2e8f0;
+  --chart-axis-color: #64748b;
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-text: #0f172a;
+  --chart-hover-color: #f1f5f9;
+  --radius: 0.75rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.67 0.16 276);
+  --chart-2: oklch(0.72 0.14 162);
+  --chart-3: oklch(0.75 0.15 75);
+  --chart-4: oklch(0.7 0.18 25);
+  --chart-5: oklch(0.7 0.16 220);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.145 0.006 285);
+  --foreground: oklch(0.96 0.004 285);
+  --card: oklch(0.19 0.008 285);
+  --card-foreground: oklch(0.96 0.004 285);
+  --popover: oklch(0.19 0.008 285);
+  --popover-foreground: oklch(0.96 0.004 285);
+  --primary: oklch(0.72 0.14 276);
+  --primary-foreground: oklch(0.17 0.02 276);
+  --secondary: oklch(0.25 0.008 285);
+  --secondary-foreground: oklch(0.94 0.004 285);
+  --muted: oklch(0.24 0.008 285);
+  --muted-foreground: oklch(0.7 0.01 285);
+  --accent: oklch(0.25 0.01 285);
+  --accent-foreground: oklch(0.94 0.004 285);
+  --destructive: oklch(0.66 0.19 25);
+  --border: oklch(0.3 0.008 285 / 80%);
+  --input: oklch(0.3 0.008 285 / 80%);
+  --ring: oklch(0.62 0.12 276);
+  --chart-1: oklch(0.72 0.14 276);
+  --chart-2: oklch(0.74 0.14 162);
+  --chart-3: oklch(0.78 0.15 75);
+  --chart-4: oklch(0.68 0.19 25);
+  --chart-5: oklch(0.72 0.15 220);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #09090b;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.theme-dark {
+  color-scheme: dark;
+  background-color: #09090b;
+  color: #f4f4f5;
+  --chart-grid-color: #334155;
+  --chart-axis-color: #94a3b8;
+  --chart-tooltip-bg: #111827;
+  --chart-tooltip-text: #f1f5f9;
+  --chart-hover-color: #1e293b;
+}
+
+.theme-dark [class~="bg-white"] {
+  background-color: #18181b;
+}
+
+.theme-dark [class~="bg-slate-50"] {
+  background-color: #0f172a;
+}
+
+.theme-dark [class~="bg-slate-100"] {
+  background-color: #1e293b;
+}
+
+.theme-dark [class~="bg-slate-200"] {
+  background-color: #334155;
+}
+
+.theme-dark [class~="bg-slate-300"] {
+  background-color: #475569;
+}
+
+.theme-dark [class~="text-slate-900"],
+.theme-dark [class~="text-slate-800"] {
+  color: #f1f5f9;
+}
+
+.theme-dark [class~="text-slate-700"] {
+  color: #d1d9e6;
+}
+
+.theme-dark [class~="text-slate-600"] {
+  color: #b6c2d2;
+}
+
+.theme-dark [class~="text-slate-500"] {
+  color: #94a3b8;
+}
+
+.theme-dark [class~="text-slate-400"] {
+  color: #8291a7;
+}
+
+.theme-dark [class~="border-slate-100"],
+.theme-dark [class~="border-slate-200"],
+.theme-dark [class~="border-slate-300"] {
+  border-color: #334155;
+}
+
+.theme-dark [class~="bg-red-50"] {
+  background-color: #451a1a;
+}
+
+.theme-dark [class~="text-red-700"] {
+  color: #fca5a5;
+}
+
+.theme-dark [class~="bg-amber-50"] {
+  background-color: #422006;
+}
+
+.theme-dark [class~="text-amber-700"],
+.theme-dark [class~="text-amber-800"] {
+  color: #fcd34d;
+}
+
+.theme-dark [class~="bg-amber-100"] {
+  background-color: #422006;
+}
+
+.theme-dark [class~="border-amber-200"] {
+  border-color: #854d0e;
+}
+
+.theme-dark [class~="text-amber-900"] {
+  color: #fde68a;
+}
+
+.theme-dark [class~="bg-emerald-50"] {
+  background-color: #064e3b;
+}
+
+.theme-dark [class~="text-emerald-700"] {
+  color: #6ee7b7;
+}
+
+.theme-dark [class~="bg-indigo-50"],
+.theme-dark [class~="bg-indigo-100"] {
+  background-color: #25234f;
+}
+
+.theme-dark [class~="text-indigo-700"],
+.theme-dark [class~="text-indigo-900"] {
+  color: #c7d2fe;
+}
+
+.theme-dark [class~="bg-sky-50"] {
+  background-color: #082f49;
+}
+
+.theme-dark [class~="text-sky-700"] {
+  color: #7dd3fc;
+}
+
+.theme-dark [class~="border-indigo-200"] {
+  border-color: #4338ca;
+}
+
+.theme-dark [class~="bg-pink-50"] {
+  background-color: #4a1735;
+}
+
+.theme-dark [class~="text-pink-700"],
+.theme-dark [class~="text-pink-800"] {
+  color: #fbcfe8;
+}
+
+.theme-dark [class~="border-pink-100"] {
+  border-color: #831843;
+}
+
+.theme-dark [class~="bg-pink-100"] {
+  background-color: #831843;
+}
+
+.theme-dark [class~="bg-rose-50"] {
+  background-color: #3f1d2b;
+}
+
+.theme-dark [class~="text-rose-700"] {
+  color: #fda4af;
+}
+
+.theme-dark [class~="bg-gradient-to-r"] {
+  background-image: linear-gradient(to right, #311426, #111827);
+}
+
+.theme-dark [class~="hover:bg-slate-50"]:hover,
+.theme-dark [class~="hover:bg-slate-100"]:hover,
+.theme-dark [class~="hover:bg-slate-200"]:hover {
+  background-color: #334155;
+}
+
+.theme-dark [class~="hover:bg-red-50"]:hover {
+  background-color: #7f1d1d;
+}
+
+.theme-dark [class~="hover:bg-indigo-50"]:hover,
+.theme-dark [class~="hover:bg-pink-50"]:hover {
+  background-color: #37306b;
+}
+
+.theme-dark input,
+.theme-dark textarea,
+.theme-dark select {
+  border-color: #475569;
+  background-color: #111827;
+  color: #e2e8f0;
+}
+
+.theme-dark input::placeholder,
+.theme-dark textarea::placeholder {
+  color: #8291a7;
+}
+
+.theme-dark [class~="focus:ring-indigo-100"]:focus,
+.theme-dark [class~="focus:ring-pink-100"]:focus {
+  --tw-ring-color: #4338ca;
+}
+
+.birthday-confetti::before,
+.birthday-confetti::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  left: 12%;
+  top: 8%;
+  background: #fde047;
+  box-shadow:
+    54px 32px 0 #22d3ee,
+    110px 8px 0 #f9a8d4,
+    184px 44px 0 #ffffff,
+    260px 12px 0 #86efac,
+    320px 68px 0 #fde047,
+    25px 120px 0 #ffffff,
+    145px 150px 0 #22d3ee,
+    285px 128px 0 #f9a8d4;
+  animation: birthday-confetti-float 2.4s ease-in-out infinite alternate;
+}
+
+.birthday-confetti::after {
+  left: 70%;
+  top: 18%;
+  transform: rotate(45deg);
+  animation-delay: -1.2s;
+}
+
+@keyframes birthday-confetti-float {
+  from {
+    transform: translateY(-4px) rotate(-4deg);
+  }
+  to {
+    transform: translateY(8px) rotate(8deg);
+  }
+}
